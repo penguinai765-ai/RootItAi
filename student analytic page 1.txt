@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudySpark Analytics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        electric: '#7B61FF',
+                        coral: '#FF6B6B',
+                        sunshine: '#FFD166',
+                        teal: '#06D6A0',
+                        royal: '#118AB2',
+                        lavender: '#A78BFA',
+                        raspberry: '#EF476F',
+                        mint: '#83C5BE',
+                        peach: '#FF9A76',
+                        sky: '#89CFF0'
+                    },
+                    animation: {
+                        'bounce-slow': 'bounce 3s infinite',
+                        'wiggle': 'wiggle 1s ease-in-out infinite',
+                        'float': 'float 3s ease-in-out infinite',
+                        'pulse-glow': 'pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                    },
+                    keyframes: {
+                        wiggle: {
+                            '0%, 100%': { transform: 'rotate(-3deg)' },
+                            '50%': { transform: 'rotate(3deg)' }
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' }
+                        },
+                        'pulse-glow': {
+                            '0%, 100%': { opacity: '1' },
+                            '50%': { 
+                                opacity: '0.8',
+                                filter: 'drop-shadow(0 0 8px rgba(123, 97, 255, 0.7))'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @keyframes confetti {
+            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #7B61FF;
+            animation: confetti 3s ease-in-out forwards;
+        }
+        .sparkle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #fff;
+            animation: sparkle 1.5s infinite alternate;
+        }
+        @keyframes sparkle {
+            0% { transform: scale(0.8); opacity: 0.6; }
+            100% { transform: scale(1.2); opacity: 1; }
+        }
+        .progress-ring__circle {
+            transition: stroke-dashoffset 0.5s ease;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+        .cute-btn {
+            transition: all 0.3s ease;
+        }
+        .cute-btn:hover {
+            transform: translateY(-2px) scale(1.05);
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+        }
+        .glow-effect {
+            box-shadow: 0 0 15px rgba(123, 97, 255, 0.4);
+        }
+        .bg-gradient-electric {
+            background: linear-gradient(135deg, #7B61FF 0%, #A78BFA 100%);
+        }
+        .bg-gradient-coral {
+            background: linear-gradient(135deg, #FF6B6B 0%, #FF9A76 100%);
+        }
+        .bg-gradient-sunshine {
+            background: linear-gradient(135deg, #FFD166 0%, #FFEE93 100%);
+        }
+        .bg-gradient-teal {
+            background: linear-gradient(135deg, #06D6A0 0%, #83C5BE 100%);
+        }
+        .bg-gradient-royal {
+            background: linear-gradient(135deg, #118AB2 0%, #89CFF0 100%);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-b from-blue-50 to-purple-50 text-gray-800 font-sans">
+    <!-- Sparkle elements -->
+    <div id="sparkles-container" class="fixed inset-0 pointer-events-none overflow-hidden"></div>
+
+    <!-- Top Navigation -->
+    <header class="fixed top-0 left-0 right-0 bg-white bg-opacity-90 backdrop-blur-sm shadow-sm z-10 px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="relative animate-wiggle">
+                <div class="w-10 h-10 rounded-full bg-gradient-electric flex items-center justify-center text-white font-bold shadow-md">
+                    <i class="fas fa-star"></i>
+                </div>
+                <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-raspberry rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-white animate-bounce-slow">
+                    3
+                </div>
+            </div>
+            <div>
+                <h1 class="font-bold text-electric">Emma Sparkle</h1>
+                <p class="text-xs text-gray-500 flex items-center">
+                    <span class="w-2 h-2 bg-teal rounded-full mr-1 animate-pulse"></span>
+                    Level 5 Scholar
+                </p>
+            </div>
+        </div>
+        
+        <div class="flex items-center space-x-4">
+            <div class="relative">
+                <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-electric animate-float">
+                    <i class="fas fa-gem"></i>
+                </div>
+                <div class="absolute -top-1 -right-1 w-5 h-5 bg-lavender rounded-full flex items-center justify-center text-xs text-white animate-pulse-glow">
+                    42
+                </div>
+            </div>
+            <button class="text-gray-500 hover:text-electric transition-colors">
+                <i class="fas fa-ellipsis-v"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="pt-20 pb-24 px-4">
+        <!-- XP Progress Bar -->
+        <div class="mb-6 relative">
+            <div class="flex justify-between text-sm mb-1">
+                <span class="font-medium text-electric">Sparkle Progress</span>
+                <span class="font-bold text-electric">1,240/2,000 <i class="fas fa-sparkle ml-1 text-yellow-400"></i></span>
+            </div>
+            <div class="w-full bg-white rounded-full h-4 shadow-inner overflow-hidden">
+                <div class="bg-gradient-electric h-4 rounded-full relative" style="width: 62%">
+                    <div class="absolute inset-0 bg-white bg-opacity-30 animate-pulse-glow"></div>
+                </div>
+            </div>
+            <div class="absolute -right-2 -top-2 w-8 h-8 bg-raspberry rounded-full flex items-center justify-center text-white shadow-md">
+                <i class="fas fa-crown text-xs"></i>
+            </div>
+        </div>
+
+        <!-- Learning Summary Cards in 2x2 Grid -->
+        <h2 class="text-xl font-bold mb-4 text-electric flex items-center">
+            <i class="fas fa-magic mr-2 animate-wiggle"></i> Your Magic Stats
+        </h2>
+        <div class="grid grid-cols-2 gap-4 mb-8">
+            <!-- Card 1 - Electric Purple -->
+            <div class="bg-white rounded-2xl shadow-md p-5 border-b-4 border-electric transform transition-all hover:scale-105 cute-btn">
+                <div class="flex items-start">
+                    <div class="bg-purple-100 p-3 rounded-xl mr-4 animate-float">
+                        <i class="fas fa-hat-wizard text-electric text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold mb-1 text-electric">Learning Style</h3>
+                        <p class="text-sm text-gray-600">Creative problem solver with visual thinking</p>
+                    </div>
+                </div>
+                <div class="mt-4 h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                    <div class="h-full bg-gradient-electric rounded-full relative" style="width: 85%">
+                        <div class="absolute inset-0 bg-white bg-opacity-20 animate-pulse-glow"></div>
+                    </div>
+                </div>
+                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>Visual</span>
+                    <span class="font-bold text-electric">85%</span>
+                </div>
+            </div>
+
+            <!-- Card 2 - Teal -->
+            <div class="bg-white rounded-2xl shadow-md p-5 border-b-4 border-teal transform transition-all hover:scale-105 cute-btn">
+                <div class="flex items-start">
+                    <div class="bg-green-100 p-3 rounded-xl mr-4 animate-float" style="animation-delay: 0.2s">
+                        <i class="fas fa-brain text-teal text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold mb-1 text-teal">Memory Power</h3>
+                        <p class="text-sm text-gray-600">Great at remembering stories & patterns</p>
+                    </div>
+                </div>
+                <div class="mt-3 flex items-center text-sm">
+                    <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full mr-2 animate-pulse">+12%</span>
+                    <span class="text-gray-500">improvement</span>
+                </div>
+            </div>
+
+            <!-- Card 3 - Royal Blue -->
+            <div class="bg-white rounded-2xl shadow-md p-5 border-b-4 border-royal transform transition-all hover:scale-105 cute-btn">
+                <div class="flex items-start">
+                    <div class="bg-blue-100 p-3 rounded-xl mr-4 animate-float" style="animation-delay: 0.4s">
+                        <i class="fas fa-balance-scale-right text-royal text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold mb-1 text-royal">Study Balance</h3>
+                        <p class="text-sm text-gray-600">Perfect mix of focus & creativity</p>
+                    </div>
+                </div>
+                <div class="mt-3 flex space-x-2">
+                    <div class="flex-1">
+                        <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-electric rounded-full" style="width: 70%"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">Creativity</div>
+                    </div>
+                    <div class="flex-1">
+                        <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-teal rounded-full" style="width: 30%"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">Logic</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 4 - Coral -->
+            <div class="bg-white rounded-2xl shadow-md p-5 border-b-4 border-coral transform transition-all hover:scale-105 cute-btn">
+                <div class="flex items-start">
+                    <div class="bg-red-100 p-3 rounded-xl mr-4 animate-float" style="animation-delay: 0.6s">
+                        <i class="fas fa-clock text-coral text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold mb-1 text-coral">Focus Time</h3>
+                        <p class="text-sm text-gray-600">More time on Art this week  ✨</p>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <div class="flex items-center justify-between text-xs mb-1">
+                        <span>Art Class</span>
+                        <span class="font-bold text-coral">45%</span>
+                    </div>
+                    <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-coral rounded-full" style="width: 45%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Growth Trend Graph -->
+        <div class="bg-white rounded-2xl shadow-md p-5 mb-8 transform transition-all hover:scale-[1.01] cute-btn">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-electric flex items-center">
+                    <i class="fas fa-chart-line mr-2"></i> Magic Growth
+                </h2>
+                <div class="flex space-x-2">
+                    <button class="text-xs bg-gray-100 px-3 py-1 rounded-full hover:bg-electric hover:text-white transition-colors">Week</button>
+                    <button class="text-xs bg-electric text-white px-3 py-1 rounded-full glow-effect">Month</button>
+                    <button class="text-xs bg-gray-100 px-3 py-1 rounded-full hover:bg-electric hover:text-white transition-colors">Year</button>
+                </div>
+            </div>
+            
+            <!-- Simple Line Graph with cute styling -->
+            <div class="h-48 relative">
+                <div class="absolute bottom-0 left-0 right-0 h-px bg-gray-200"></div>
+                <!-- Graph background with stars -->
+                <div class="absolute inset-0 opacity-10">
+                    <div class="absolute top-1/4 left-1/4 w-2 h-2 rounded-full bg-electric"></div>
+                    <div class="absolute top-1/3 right-1/3 w-2 h-2 rounded-full bg-teal"></div>
+                    <div class="absolute top-3/4 left-1/3 w-2 h-2 rounded-full bg-coral"></div>
+                </div>
+                
+                <div class="absolute left-0 right-0 top-0 bottom-0 flex items-end space-x-1">
+                    <!-- Graph bars with cute styling -->
+                    <div class="flex-1 flex flex-col items-center group">
+                        <div class="w-full bg-gradient-electric rounded-t-full relative overflow-hidden" style="height: 30%">
+                            <div class="absolute inset-0 bg-white bg-opacity-20 animate-pulse"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1 group-hover:text-electric transition-colors">Mon</div>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center group">
+                        <div class="w-full bg-gradient-teal rounded-t-full" style="height: 50%">
+                            <div class="absolute inset-0 bg-white bg-opacity-20 animate-pulse"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1 group-hover:text-teal transition-colors">Tue</div>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center group">
+                        <div class="w-full bg-gradient-coral rounded-t-full" style="height: 70%">
+                            <div class="absolute inset-0 bg-white bg-opacity-20 animate-pulse"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1 group-hover:text-coral transition-colors">Wed</div>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center group">
+                        <div class="w-full bg-gradient-sunshine rounded-t-full" style="height: 90%">
+                            <div class="absolute inset-0 bg-white bg-opacity-20 animate-pulse"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1 group-hover:text-sunshine transition-colors">Thu</div>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center group">
+                        <div class="w-full bg-gradient-royal rounded-t-full" style="height: 60%">
+                            <div class="absolute inset-0 bg-white bg-opacity-20 animate-pulse"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1 group-hover:text-royal transition-colors">Fri</div>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center group">
+                        <div class="w-full bg-gradient-electric rounded-t-full" style="height: 75%">
+                            <div class="absolute inset-0 bg-white bg-opacity-20 animate-pulse"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1 group-hover:text-electric transition-colors">Sat</div>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center group">
+                        <div class="w-full bg-gradient-teal rounded-t-full" style="height: 85%">
+                            <div class="absolute inset-0 bg-white bg-opacity-20 animate-pulse"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1 group-hover:text-teal transition-colors">Sun</div>
+                    </div>
+                </div>
+                <div class="absolute top-0 right-0 bg-white shadow-md px-3 py-1 rounded-full text-xs flex items-center">
+                    <span class="text-teal font-bold animate-pulse">+12%</span> 
+                    <span class="ml-1">this week</span>
+                    <i class="fas fa-sparkle text-yellow-400 ml-1 animate-spin" style="animation-duration: 3s"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subject Overview -->
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="font-bold text-electric flex items-center">
+                <i class="fas fa-book-open mr-2"></i> Your Magical Subjects
+            </h2>
+            <button class="text-electric text-sm font-medium flex items-center cute-btn">
+                See All <i class="fas fa-chevron-right ml-1 text-xs"></i>
+            </button>
+        </div>
+        
+        <div class="relative">
+            <div class="overflow-x-auto pb-4 scrollbar-hide">
+                <div class="flex space-x-4" style="width: max-content;">
+                    <!-- Subject Card 1 - Electric Purple -->
+                    <div class="w-52 flex-shrink-0 bg-white rounded-2xl shadow-md p-5 transform transition-all hover:scale-105 cute-btn">
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="bg-purple-100 p-3 rounded-xl animate-wiggle">
+                                <i class="fas fa-palette text-electric text-lg"></i>
+                            </div>
+                            <div class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full animate-bounce-slow">+8%</div>
+                        </div>
+                        <h3 class="font-bold mb-1 text-electric">Art Class</h3>
+                        <p class="text-xs text-gray-500 mb-3">Average Score: 88%</p>
+                        <div class="h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
+                            <div class="h-full bg-gradient-electric rounded-full" style="width: 88%"></div>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full flex items-center animate-pulse">
+                                <i class="fas fa-sparkles text-xs mr-1"></i>
+                                <span>Creative Genius</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Subject Card 2 - Coral -->
+                    <div class="w-52 flex-shrink-0 bg-white rounded-2xl shadow-md p-5 transform transition-all hover:scale-105 cute-btn">
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="bg-red-100 p-3 rounded-xl animate-wiggle" style="animation-delay: 0.2s">
+                                <i class="fas fa-book text-coral text-lg"></i>
+                            </div>
+                            <div class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full animate-bounce-slow">+15%</div>
+                        </div>
+                        <h3 class="font-bold mb-1 text-coral">Literature</h3>
+                        <p class="text-xs text-gray-500 mb-3">Average Score: 92%</p>
+                        <div class="h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
+                            <div class="h-full bg-gradient-coral rounded-full" style="width: 92%"></div>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full flex items-center animate-pulse">
+                                <i class="fas fa-quill text-xs mr-1"></i>
+                                <span>Story Weaver</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Subject Card 3 - Teal -->
+                    <div class="w-52 flex-shrink-0 bg-white rounded-2xl shadow-md p-5 transform transition-all hover:scale-105 cute-btn">
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="bg-green-100 p-3 rounded-xl animate-wiggle" style="animation-delay: 0.4s">
+                                <i class="fas fa-leaf text-teal text-lg"></i>
+                            </div>
+                            <div class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full animate-bounce-slow">+5%</div>
+                        </div>
+                        <h3 class="font-bold mb-1 text-teal">Biology</h3>
+                        <p class="text-xs text-gray-500 mb-3">Average Score: 78%</p>
+                        <div class="h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
+                            <div class="h-full bg-gradient-teal rounded-full" style="width: 78%"></div>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full flex items-center animate-pulse">
+                                <i class="fas fa-seedling text-xs mr-1"></i>
+                                <span>Nature Explorer</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Subject Card 4 - Sunshine Yellow -->
+                    <div class="w-52 flex-shrink-0 bg-white rounded-2xl shadow-md p-5 transform transition-all hover:scale-105 cute-btn">
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="bg-yellow-100 p-3 rounded-xl animate-wiggle" style="animation-delay: 0.6s">
+                                <i class="fas fa-music text-sunshine text-lg"></i>
+                            </div>
+                            <div class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full animate-bounce-slow">+22%</div>
+                        </div>
+                        <h3 class="font-bold mb-1 text-sunshine">Music</h3>
+                        <p class="text-xs text-gray-500 mb-3">Average Score: 85%</p>
+                        <div class="h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
+                            <div class="h-full bg-gradient-sunshine rounded-full" style="width: 85%"></div>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full flex items-center animate-pulse">
+                                <i class="fas fa-music text-xs mr-1"></i>
+                                <span>Melody Maker</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="fixed bottom-0 left-0 right-0 bg-white shadow-lg z-10 px-4 py-3 flex justify-around items-center">
+            <a href="#" class="flex flex-col items-center text-electric">
+                <i class="fas fa-home text-xl mb-1"></i>
+                <span class="text-xs">Home</span>
+            </a>
+            <a href="#" class="flex flex-col items-center text-gray-500 hover:text-electric transition-colors">
+                <i class="fas fa-book text-xl mb-1"></i>
+                <span class="text-xs">Courses</span>
+            </a>
+            <a href="#" class="flex flex-col items-center text-gray-500 hover:text-electric transition-colors">
+                <i class="fas fa-chart-pie text-xl mb-1"></i>
+                <span class="text-xs">Stats</span>
+            </a>
+            <a href="#" class="flex flex-col items-center text-gray-500 hover:text-electric transition-colors">
+                <i class="fas fa-trophy text-xl mb-1"></i>
+                <span class="text-xs">Rewards</span>
+            </a>
+            <a href="#" class="flex flex-col items-center text-gray-500 hover:text-electric transition-colors">
+                <i class="fas fa-user text-xl mb-1"></i>
+                <span class="text-xs">Profile</span>
+            </a>
+        </nav>
+    </main>
+
+    <script>
+        // Create sparkles randomly on the screen
+        function createSparkles() {
+            const container = document.getElementById('sparkles-container');
+            const colors = ['#7B61FF', '#FF6B6B', '#FFD166', '#06D6A0', '#118AB2', '#A78BFA', '#EF476F', '#83C5BE', '#FF9A76'];
+            
+            for (let i = 0; i < 30; i++) {
+                const sparkle = document.createElement('div');
+                sparkle.className = 'sparkle';
+                
+                // Random position
+                sparkle.style.left = `${Math.random() * 100}%`;
+                sparkle.style.top = `${Math.random() * 100}%`;
+                
+                // Random color
+                sparkle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                
+                // Random size
+                const size = Math.random() * 4 + 2;
+                sparkle.style.width = `${size}px`;
+                sparkle.style.height = `${size}px`;
+                
+                // Random animation delay
+                sparkle.style.animationDelay = `${Math.random() * 2}s`;
+                
+                container.appendChild(sparkle);
+            }
+        }
+        
+        // Create confetti effect
+        function createConfetti() {
+            const container = document.getElementById('sparkles-container');
+            const colors = ['#7B61FF', '#FF6B6B', '#FFD166', '#06D6A0', '#118AB2', '#A78BFA', '#EF476F', '#83C5BE', '#FF9A76'];
+            
+            for (let i = 0; i < 50; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                
+                // Random position at top
+                confetti.style.left = `${Math.random() * 100}%`;
+                confetti.style.top = '0';
+                
+                // Random color
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                
+                // Random shape
+                if (Math.random() > 0.5) {
+                    confetti.style.borderRadius = '50%';
+                }
+                
+                // Random size
+                const size = Math.random() * 10 + 5;
+                confetti.style.width = `${size}px`;
+                confetti.style.height = `${size}px`;
+                
+                // Random animation duration
+                const duration = Math.random() * 3 + 2;
+                confetti.style.animationDuration = `${duration}s`;
+                
+                container.appendChild(confetti);
+            }
+        }
+        
+        // Add click effect to cute buttons
+        document.querySelectorAll('.cute-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                createConfetti();
+            });
+        });
+        
+        // Initialize sparkles when page loads
+        window.addEventListener('load', createSparkles);
+    </script>
+</body>
+</html>

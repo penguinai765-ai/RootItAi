@@ -10,18 +10,20 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 // --- Type Definitions ---
 interface StudentAnalytics { id: string; name: string; division: string; overallScore: number; }
 interface ChapterPerformance { name: string; averageScore: number; }
-interface SubtopicPerformance { name: string; averageScore: number; parentChapter: string; }
 interface TeacherAnalyticsData {
     classAverage: number;
     studentList: StudentAnalytics[];
     chapterPerformance: ChapterPerformance[];
-    subtopicPerformance: SubtopicPerformance[];
+    subjectCode: string; // This is crucial for linking
 }
 
 const findTopAndBottom = (items: ChapterPerformance[]) => {
     if (!items || items.length === 0) return { top: null, bottom: null };
     const sorted = [...items].sort((a, b) => b.averageScore - a.averageScore);
-    return { top: sorted[0], bottom: sorted[sorted.length - 1] };
+    return {
+        top: sorted[0],
+        bottom: sorted[sorted.length - 1],
+    };
 };
 
 // --- Main Component ---
@@ -30,19 +32,16 @@ export default function TeacherAnalyticsPage() {
     const [analyticsData, setAnalyticsData] = useState<TeacherAnalyticsData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
+    const [groupBy, setGroupBy] = useState<'performance' | 'division'>('performance');
 
     useEffect(() => {
         if (user) {
             getTeacherAnalytics(user.uid)
-                .then(data => {
-                    setAnalyticsData(data);
-                    if (data?.chapterPerformance?.length > 0) {
-                        const topChapter = findTopAndBottom(data.chapterPerformance).top;
-                        if (topChapter) setSelectedChapter(topChapter.name);
-                    }
+                .then(data => setAnalyticsData(data))
+                .catch(err => {
+                    console.error(err);
+                    setError("Could not load class analytics.");
                 })
-                .catch(err => { console.error(err); setError("Could not load class analytics."); })
                 .finally(() => setIsLoading(false));
         }
     }, [user]);
@@ -54,10 +53,31 @@ export default function TeacherAnalyticsPage() {
         return { studentsToWatch, ...chapterStats };
     }, [analyticsData]);
 
-    const filteredSubtopics = useMemo(() => {
-        if (!selectedChapter || !analyticsData) return [];
-        return analyticsData.subtopicPerformance.filter(s => s.parentChapter === selectedChapter);
-    }, [selectedChapter, analyticsData]);
+    const groupedStudents = useMemo(() => {
+        if (!analyticsData) return {};
+        
+        if (groupBy === 'division') {
+            return analyticsData.studentList.reduce((acc, student) => {
+                const key = `Division ${student.division}`;
+                if (!acc[key]) acc[key] = [];
+                acc[key].push(student);
+                return acc;
+            }, {} as Record<string, StudentAnalytics[]>);
+        } else { // Group by performance
+            const groups = {
+                'Strong (80%+)': [],
+                'Average (50-79%)': [],
+                'Needs Support (<50%)': [],
+            } as Record<string, StudentAnalytics[]>;
+
+            analyticsData.studentList.forEach(student => {
+                if (student.overallScore >= 80) groups['Strong (80%+)'].push(student);
+                else if (student.overallScore >= 50) groups['Average (50-79%)'].push(student);
+                else groups['Needs Support (<50%)'].push(student);
+            });
+            return groups;
+        }
+    }, [analyticsData, groupBy]);
 
     if (isLoading) return <div className="p-8">Loading class analytics...</div>;
     if (error) return <div className="p-8 text-red-500">{error}</div>;
@@ -80,58 +100,47 @@ export default function TeacherAnalyticsPage() {
                 </Card>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <Card title="Class Performance by Chapter">
-                    <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={analyticsData.chapterPerformance}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" />
-                            <YAxis domain={[0, 100]} />
-                            <Tooltip />
-                            {/* --- THIS IS THE CORRECTED PART --- */}
-                            {/* The onClick handler is moved to the Bar element itself */}
-                            <Bar 
-                                dataKey="averageScore" 
-                                fill="#8884d8" 
-                                name="Avg Score"
-                                onClick={(data) => {
-                                    // The 'data' object here is the payload for the clicked bar, e.g., { name: 'Algebra', ... }
-                                    // We can now safely access the 'name' property.
-                                    if (data && data.name) {
-                                        setSelectedChapter(data.name);
-                                    }
-                                }}
-                                cursor="pointer"
-                            />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </Card>
-                
-                <Card title={selectedChapter ? `Subtopics in "${selectedChapter}"` : "Subtopic Performance (Click a Chapter)"}>
-                     <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={filteredSubtopics}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" tick={false} />
-                            <YAxis domain={[0, 100]} />
-                            <Tooltip />
-                            <Legend />
-                            <Bar dataKey="averageScore" fill="#82ca9d" name="Avg Score" />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </Card>
-            </div>
+            <Card title="Class Performance by Chapter">
+                <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={analyticsData.chapterPerformance}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis domain={[0, 100]} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="averageScore" fill="#8884d8" name="Avg Score" />
+                    </BarChart>
+                </ResponsiveContainer>
+            </Card>
 
             <Card title="Student Roster">
-                <ul className="space-y-2">
-                    {analyticsData.studentList.map(student => (
-                        <li key={student.id} className="p-2 rounded-md hover:bg-gray-100">
-                            <Link href={`/teacher/analytics/${student.id}`} className="flex justify-between items-center">
-                                <span>{student.name}</span>
-                                <span className="font-bold">{student.overallScore}%</span>
-                            </Link>
-                        </li>
+                <div className="flex justify-end mb-4">
+                    <select onChange={(e) => setGroupBy(e.target.value as any)} value={groupBy} className="p-2 border rounded-md">
+                        <option value="performance">Group by Performance</option>
+                        <option value="division">Group by Division</option>
+                    </select>
+                </div>
+
+                <div className="space-y-6">
+                    {Object.entries(groupedStudents).map(([groupName, students]) => (
+                        <div key={groupName}>
+                            <h3 className="text-lg font-semibold mb-2 border-b pb-1">{groupName} ({students.length})</h3>
+                            <ul className="space-y-2">
+                                {students.map(student => (
+                                    <li key={student.id} className="p-2 rounded-md hover:bg-gray-100">
+                                        <Link 
+                                            href={`/teacher/analytics/${student.id}?subjectCode=${analyticsData.subjectCode}`} 
+                                            className="flex justify-between items-center"
+                                        >
+                                            <span>{student.name}</span>
+                                            <span className="font-bold">{student.overallScore}%</span>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     ))}
-                </ul>
+                </div>
             </Card>
         </div>
     );

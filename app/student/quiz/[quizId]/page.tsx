@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
-import { startQuizSession, getNextQuestion, completeQuizSession } from '@/lib/quizService';
+// NEW: Import a dedicated service for the quiz API calls
+
 
 import QuestionDisplay from '@/components/quiz/QuestionDisplay';
 import AnswerOptions from '@/components/quiz/AnswerOptions';
@@ -12,6 +13,28 @@ import FeedbackDisplay from '@/components/quiz/FeedbackDisplay';
 import Button from '@/components/Button';
 
 const TOTAL_QUESTIONS = 5;
+
+// This is a new service file that will abstract the API calls
+// I will create it in the next step.
+const quizApiService = {
+    startQuiz: async (studentId: string, quizId: string) => {
+        const res = await fetch('/api/quiz-session', { method: 'POST', body: JSON.stringify({ action: 'initialize', studentId, assignedQuizId: quizId }) });
+        return res.json();
+    },
+    evaluateAnswer: async (currentQuestion: any, studentAnswer: string) => {
+        const res = await fetch('/api/quiz-session', { method: 'POST', body: JSON.stringify({ action: 'evaluate', currentQuestion, studentAnswer }) });
+        return res.json();
+    },
+    getNextQuestion: async (sessionData: any, questionNumber: number, previousAnswers: any[]) => {
+        const res = await fetch('/api/quiz-session', { method: 'POST', body: JSON.stringify({ action: 'next', sessionData, questionNumber, previousAnswers }) });
+        return res.json();
+    },
+    completeQuiz: async (studentId: string, quizId: string, sessionData: any, previousAnswers: any[]) => {
+        const res = await fetch('/api/quiz-session', { method: 'POST', body: JSON.stringify({ action: 'complete', studentId, assignedQuizId: quizId, sessionData, previousAnswers }) });
+        return res.json();
+    }
+};
+
 
 const QuizPage = () => {
   const { quizId } = useParams();
@@ -28,7 +51,7 @@ const QuizPage = () => {
   
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [feedback, setFeedback] = useState<boolean | null>(null);
+  const [evaluation, setEvaluation] = useState<any>(null); // NEW: To store evaluation result
 
   const answerStartTime = useRef<number>(Date.now());
 
@@ -36,78 +59,82 @@ const QuizPage = () => {
     if (user && quizId) {
       const initialize = async () => {
         try {
-          const { question, sessionData } = await startQuizSession(user.uid, quizId as string);
+          const { question, sessionData } = await quizApiService.startQuiz(user.uid, quizId as string);
           setSessionData(sessionData);
           setCurrentQuestionObject(question);
           answerStartTime.current = Date.now();
-        } catch (err: any) {
-          setError(err.message);
-        } finally {
-          setIsLoading(false);
-        }
+        } catch (err: any) { setError(err.message); } 
+        finally { setIsLoading(false); }
       };
       initialize();
     }
   }, [user, quizId]);
 
   const handleSelectAnswer = (optionIndex: number) => {
-    if (!isSubmitted) {
-      setSelectedOption(optionIndex);
-    }
+    if (!isSubmitted) setSelectedOption(optionIndex);
   };
 
-  const handleSubmitAnswer = () => {
+  const handleSubmitAnswer = async () => {
     if (selectedOption === null) return;
 
-    const responseTime = (Date.now() - answerStartTime.current) / 1000;
-    const isCorrect = currentQuestionObject.options[selectedOption] === currentQuestionObject.correctAnswer;
-    
-    setFeedback(isCorrect);
-    setIsSubmitted(true);
+    setIsLoading(true);
+    try {
+        const studentAnswer = currentQuestionObject.options[selectedOption];
+        const { evaluation } = await quizApiService.evaluateAnswer(currentQuestionObject, studentAnswer);
+        setEvaluation(evaluation);
+        setIsSubmitted(true);
 
-    const newAnswer = {
-      question: currentQuestionObject.question,
-      answer: currentQuestionObject.options[selectedOption],
-      isCorrect,
-      responseTime,
-      difficulty: currentQuestionObject.difficulty,
-    };
-    setPreviousAnswers(prev => [...prev, newAnswer]);
+        const responseTime = (Date.now() - answerStartTime.current) / 1000;
+        const newAnswer = {
+            question: currentQuestionObject.question,
+            answer: studentAnswer,
+            isCorrect: evaluation.isCorrect,
+            cognitiveAnalysis: evaluation.cognitiveAnalysis, // Store new data
+            responseTime,
+            difficulty: currentQuestionObject.difficulty,
+        };
+        setPreviousAnswers(prev => [...prev, newAnswer]);
+
+    } catch(err: any) {
+        setError(err.message);
+    } finally {
+        setIsLoading(false);
+    }
   };
 
   const handleNextQuestion = async () => {
     if (questionNumber < TOTAL_QUESTIONS) {
         setIsLoading(true);
+        // Reset for next question
         setIsSubmitted(false);
         setSelectedOption(null);
-        setFeedback(null);
+        setEvaluation(null);
         
         try {
-          const { question } = await getNextQuestion(sessionData, questionNumber + 1, previousAnswers);
+          const { question } = await quizApiService.getNextQuestion(sessionData, questionNumber + 1, previousAnswers);
           setCurrentQuestionObject(question);
           setQuestionNumber(questionNumber + 1);
           answerStartTime.current = Date.now();
-        } catch (err: any) {
-          setError(err.message);
-        } finally {
-          setIsLoading(false);
-        }
+        } catch (err: any) { setError(err.message); } 
+        finally { setIsLoading(false); }
       } else {
         setIsLoading(true);
         try {
-            await completeQuizSession(user!.uid, quizId as string, sessionData, previousAnswers);
-            alert("Quiz Finished! Your results have been saved. Redirecting to dashboard.");
+            await quizApiService.completeQuiz(user!.uid, quizId as string, sessionData, previousAnswers);
+            alert("Quiz Finished! Your results have been saved.");
             router.push('/student/dashboard');
         } catch(err: any) {
-            setError("Failed to save your results. Please try again.");
+            setError("Failed to save your results.");
             setIsLoading(false);
         }
       }
   };
 
-  if (error) return <div className="flex items-center justify-center min-h-screen text-red-500 p-4">Error: {error}</div>;
-  if (isLoading && !currentQuestionObject) return <div className="flex items-center justify-center min-h-screen">Loading Quiz...</div>;
-  if (!currentQuestionObject) return <div className="flex items-center justify-center min-h-screen">Could not load the quiz.</div>;
+  // ... (JSX rendering logic remains largely the same, but will now use the 'evaluation' state)
+  
+  if (error) return <div className="p-4 text-red-500">Error: {error}</div>;
+  if (isLoading && !currentQuestionObject) return <div className="p-4">Loading Quiz...</div>;
+  if (!currentQuestionObject) return <div className="p-4">Could not load quiz.</div>;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
@@ -115,15 +142,14 @@ const QuizPage = () => {
         <QuizProgress currentQuestion={questionNumber} totalQuestions={TOTAL_QUESTIONS} />
         <QuestionDisplay question={currentQuestionObject.question} />
         
-        {isSubmitted && (
+        {isSubmitted && evaluation && (
             <div className="text-center p-3 bg-gray-50 rounded-md border">
-                <FeedbackDisplay isCorrect={feedback} />
-                <p className="font-bold">Explanation:</p>
-                <p>{currentQuestionObject.explanation}</p>
+                <FeedbackDisplay isCorrect={evaluation.isCorrect} />
+                <p className="font-bold mt-2">Explanation:</p>
+                <p>{evaluation.feedback}</p>
             </div>
         )}
         
-        {/* --- THIS IS THE CORRECTED PART --- */}
         <AnswerOptions 
           options={currentQuestionObject.options} 
           onSelectAnswer={handleSelectAnswer} 
@@ -133,12 +159,9 @@ const QuizPage = () => {
         />
         
         <div className="pt-4 text-center">
-            {isLoading && isSubmitted ? (
-                <p>Loading...</p>
-            ) : !isSubmitted ? (
-                <Button onClick={handleSubmitAnswer} disabled={selectedOption === null}>
-                    Submit
-                </Button>
+            {isLoading ? (<p>Loading...</p>) : 
+             !isSubmitted ? (
+                <Button onClick={handleSubmitAnswer} disabled={selectedOption === null}>Submit</Button>
             ) : (
                 <Button onClick={handleNextQuestion}>
                     {questionNumber < TOTAL_QUESTIONS ? "Next Question" : "Finish Quiz"}
