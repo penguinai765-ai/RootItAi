@@ -2,6 +2,7 @@
 
 import { doc, getDoc, setDoc, writeBatch } from "firebase/firestore";
 import { db } from "./firebase";
+import { getStudentChapterQuizAttempts } from './firestoreService';
 
 // --- Type Definitions ---
 
@@ -31,7 +32,7 @@ interface Assignment {
 interface SessionData {
     studentProfile: StudentProfile;
     assignment: Assignment;
-    subtopicContent: string; 
+    subtopicContent: string;
     // other session data fields
 }
 
@@ -41,7 +42,7 @@ interface SessionData {
  * Initializes a quiz session by fetching student and assigned quiz data.
  * This is the first step when a student starts a quiz.
  */
-export async function initializeQuizSession(studentId: string, assignedQuizId:string): Promise<SessionData> {
+export async function initializeQuizSession(studentId: string, assignedQuizId: string): Promise<SessionData> {
     const studentDocRef = doc(db, "students", studentId);
     const studentDoc = await getDoc(studentDocRef);
 
@@ -81,22 +82,46 @@ export async function initializeQuizSession(studentId: string, assignedQuizId:st
     };
 }
 
+// Helper to summarize skill performance from answers
+function summarizeSkillPerformance(answers: any[]): Record<string, { count: number, correct: number }> {
+    const skills = { recall: { count: 0, correct: 0 }, conceptual: { count: 0, correct: 0 }, reasoning: { count: 0, correct: 0 } };
+    for (const a of answers) {
+        if (!a.cognitiveAnalysis) continue;
+        // Heuristic: use the highest cognitiveAnalysis key as the skill
+        const entries = Object.entries(a.cognitiveAnalysis as Record<string, number>);
+        if (entries.length === 0) continue;
+        const maxSkill = entries.sort((x, y) => (Number(y[1]) - Number(x[1])))[0]?.[0];
+        if (maxSkill === 'memory_retrieval') {
+            skills.recall.count += 1;
+            if (a.isCorrect) skills.recall.correct += 1;
+        } else if (maxSkill === 'problem_solving') {
+            skills.reasoning.count += 1;
+            if (a.isCorrect) skills.reasoning.correct += 1;
+        } else if (maxSkill === 'conceptual') {
+            skills.conceptual.count += 1;
+            if (a.isCorrect) skills.conceptual.correct += 1;
+        }
+    }
+    return skills;
+}
+
 /**
  * Builds the context for the next question, including performance on previous questions.
  * This helps the LLM adapt the quiz.
  */
 export function buildQuestionContext(sessionData: SessionData, questionNumber: number, previousAnswers: Answer[]): object {
+    const skillsCovered = summarizeSkillPerformance(previousAnswers);
     return {
         subject: sessionData.assignment.subjectCode,
         chapter: sessionData.assignment.chapterId,
         subtopic: sessionData.assignment.subtopicId,
         questionNumber: questionNumber,
-        subtopicContent: sessionData.subtopicContent, 
-        // Provide a summary of past performance to guide difficulty and topic selection
+        subtopicContent: sessionData.subtopicContent,
         previousAnswersSummary: previousAnswers.map(a => ({
             isCorrect: a.isCorrect,
             cognitiveAnalysis: a.cognitiveAnalysis
-        }))
+        })),
+        skillsCovered
     };
 }
 
@@ -115,28 +140,131 @@ export function calculateDifficulty(context: any): number {
 
 /**
  * Constructs the prompt to be sent to the LLM for generating a new question.
+ * Now includes previous quiz performance for the same chapter.
  */
-export function buildLLMPrompt(context: any, difficulty: number): { systemPrompt: string, userPrompt: string } {
+export async function buildLLMPrompt(
+    context: any,
+    difficulty: number,
+    studentId: string
+): Promise<{ systemPrompt: string, userPrompt: string }> {
+    // Fetch previous attempts for this chapter
+    const previousAttempts = await getStudentChapterQuizAttempts(
+        studentId,
+        context.subject,
+        context.chapter
+    );
+    // Summarize previous performance per skill
+    const prevSkillSummary = summarizeSkillPerformance(previousAttempts);
+    // Current session skill coverage
+    const currSkillSummary = context.skillsCovered || {};
+    // Compose a structured summary
+    const skillSummary = {
+        previous: prevSkillSummary,
+        current: currSkillSummary
+    };
     const systemPrompt = `
-        You are an expert AI tutor creating a personalized quiz for a high-school student. 
-        Generate a single, clear, multiple-choice question.
-        The JSON output must include: 'question', 'options' (an array of 4 strings), 'correctAnswer' (the exact string of the correct option), 
-        'explanation' (a brief justification), and 'cognitiveAnalysis' (an object with keys like 'memory_retrieval', 'problem_solving').
-        The cognitive scores should be between 0.1 and 1.0.
-    `;
+You are an expert AI tutor creating a personalized, adaptive quiz for a high-school student.
+- Use the student's previous performance on this chapter (see skill summary) to adapt the quiz.
+- Cycle through these cognitive skills: factual recall, conceptual understanding, and reasoning/logic. Use the skill summary to decide which skill to target next.
+- If a skill is weak (low correct rate), ask more questions of that type. If strong, move to the next skill.
+- Do NOT repeat the same or very similar questions in this session.
+- You must generate at most 15 questions per quiz session. If 15 questions have been asked, the quiz must end, even if not all skills are fully mastered.
+- Ensure all cognitive skills are covered and analyzed within these 15 questions. Prioritize skills that have not yet been sufficiently covered.
+- End the quiz early if the student has demonstrated sufficient ability in all skills (e.g., at least 2 correct answers per skill, or clear mastery/struggle).
+- Generate ONLY ONE question at a time. Do NOT generate a list or array of questions. Do NOT generate a quiz. Only a single question object per response.
+- Each time you are called, generate the next best question based on the latest answer and performance so far.
+- The JSON output for each question must include:
+  - 'type': 'mcq' or 'short_answer'
+  - 'question': the question text
+  - For MCQ: 'options' (array of 4 strings), 'correctAnswer' (the exact string of the correct option)
+  - For short answer: 'answerPattern' (regex or keywords for correct answer)
+  - 'difficulty' (easy/medium/hard)
+  - 'explanation' (a brief justification)
+  - 'cognitiveAnalysis' (object with keys like 'memory_retrieval', 'problem_solving', 'conceptual')
+  - 'requestConfidenceRating' boolean (true if the student should rate their confidence after this question)
+- Cognitive scores should be between 0.1 and 1.0.
+- Output ONLY the JSON for the single question, nothing else.
+`;
     const userPrompt = `
-        Context:
-        - Subject: ${context.subject}
-        - Chapter: ${context.chapter}
-        - Subtopic: ${context.subtopic}
-        - Desired Difficulty (0.0 to 1.0): ${difficulty.toFixed(1)}
-        
-        Learning Material to Base the Question On:
-        ---
-        ${context.subtopicContent}
-        ---
-    `;
+Context:
+- Subject: ${context.subject}
+- Chapter: ${context.chapter}
+- Subtopic: ${context.subtopic}
+- Desired Difficulty (0.0 to 1.0): ${difficulty.toFixed(1)}
+- Skill summary (previous, current): ${JSON.stringify(skillSummary)}
+
+Learning Material to Base the Question On:
+---
+${context.subtopicContent}
+---
+`;
     return { systemPrompt, userPrompt };
+}
+
+/**
+ * Calls the LLM to evaluate the completed quiz and return a detailed analysis object.
+ * Passes all answers, timestamps, and previous attempts for cognitive analytics and scoring.
+ */
+export async function getLLMQuizAnalysis(
+    studentId: string,
+    context: any,
+    answers: any[],
+    startTime: number,
+    endTime: number
+): Promise<any> {
+    const previousAttempts = await getStudentChapterQuizAttempts(
+        studentId,
+        context.subject,
+        context.chapter
+    );
+    const prompt = {
+        systemPrompt: `You are an expert educational analyst AI. Given a student's quiz answers, timestamps, and previous attempts on this chapter, return a JSON object with the following keys:
+{
+  conceptualUnderstanding: "Strong" | "Moderate" | "Weak",
+  reasoningSkill: "Logical" | "Superficial" | "Guesswork",
+  confidenceScore: "High" | "Medium" | "Low",
+  errorPatterns: string[],
+  retentionQuality?: "Stable" | "Needs Revision",
+  learningTrend?: "Improving" | "Declining" | "Consistent",
+  timeEfficiency: "Fast & Accurate" | "Slow & Accurate" | "Fast & Inaccurate",
+  performanceScore: number, // out of 100
+  verbalInsights: string // 2–4 sentence narrative summary of student performance
+}
+The performanceScore should be computed using: number of correct/wrong answers, number of questions attempted, time per question, difficulty of each question, and performance across difficulty levels. Use previous attempts to inform retentionQuality and learningTrend if available.`,
+        userPrompt: `Quiz answers: ${JSON.stringify(answers)}\nStart time: ${startTime}\nEnd time: ${endTime}\nPrevious attempts: ${JSON.stringify(previousAttempts)}`
+    };
+    // Use the same callLLM logic as in route.ts
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`
+        },
+        body: JSON.stringify({
+            model: 'mistral-large-latest',
+            messages: [
+                { role: 'system', content: prompt.systemPrompt },
+                { role: 'user', content: prompt.userPrompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 1000,
+        })
+    });
+    if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Mistral API request failed: ${errorBody}`);
+    }
+    const llmResponse = await response.json();
+    const content = llmResponse.choices[0]?.message?.content;
+    if (!content) throw new Error('No content in LLM response');
+    // Use the same extractAndParseJson logic as in route.ts
+    const startIndex = content.indexOf('{');
+    const endIndex = content.lastIndexOf('}');
+    if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+        throw new Error('No valid JSON object found in the LLM response.');
+    }
+    const jsonString = content.substring(startIndex, endIndex + 1);
+    return JSON.parse(jsonString);
 }
 
 /**
@@ -144,11 +272,29 @@ export function buildLLMPrompt(context: any, difficulty: number): { systemPrompt
  * In a real scenario, this could involve an LLM call for more nuanced feedback.
  */
 export async function processStudentAnswer(currentQuestion: any, studentAnswer: any, callLLM: Function): Promise<object> {
-    const isCorrect = currentQuestion.correctAnswer === studentAnswer;
-    // This function can be expanded to call an LLM for more detailed, Socratic feedback.
+    let isCorrect = false;
+    let feedback = '';
+    if (currentQuestion.type === 'mcq') {
+        isCorrect = currentQuestion.correctAnswer === studentAnswer;
+        feedback = isCorrect ? "Correct! Well done." : `Not quite. The correct answer is ${currentQuestion.correctAnswer}.`;
+    } else if (currentQuestion.type === 'short_answer') {
+        // Use a simple regex or keyword match for now
+        if (currentQuestion.answerPattern) {
+            try {
+                const regex = new RegExp(currentQuestion.answerPattern, 'i');
+                isCorrect = regex.test(studentAnswer);
+            } catch {
+                // fallback to keyword match
+                isCorrect = (currentQuestion.expectedKeywords || []).some((kw: string) => studentAnswer.toLowerCase().includes(kw.toLowerCase()));
+            }
+        } else if (currentQuestion.expectedKeywords) {
+            isCorrect = (currentQuestion.expectedKeywords || []).some((kw: string) => studentAnswer.toLowerCase().includes(kw.toLowerCase()));
+        }
+        feedback = isCorrect ? "Correct! Well done." : `Not quite. ${currentQuestion.explanation}`;
+    }
     return {
-        isCorrect: isCorrect,
-        feedback: isCorrect ? "Correct! Well done." : `Not quite. The correct answer is ${currentQuestion.correctAnswer}.`,
+        isCorrect,
+        feedback,
         explanation: currentQuestion.explanation,
         cognitiveAnalysis: currentQuestion.cognitiveAnalysis,
     };
@@ -192,24 +338,52 @@ export async function updatePerformanceAnalytics(studentId: string, assignedQuiz
         lastAttempted: new Date(),
         totalQuestions: totalQuestions,
         correctQuestions: correctAnswers,
-        answers: answers 
+        answers: answers,
+        subtopicId: sessionData.assignment.subtopicId, // Ensure subtopicId is always present
+        studentAttended: true, // Mark student as attended
+        verbalSummary: `Student completed ${totalQuestions} questions with ${correctAnswers} correct answers, achieving ${averageScore.toFixed(1)}% accuracy. Cognitive analysis shows strengths in ${Object.keys(averageCognitiveScores).slice(0, 2).join(', ')}.`
     };
 
     const submissionRef = doc(db, `quizActivations/${assignedQuizId}/submissions`, studentId);
-    const studentSubmissionRef = doc(db, `students/${studentId}/submissions`, assignedQuizId);
-    const originalQuizRef = doc(db, `assignedQuizzes/${sessionData.studentProfile.class}/quizzes`, assignedQuizId);
-
+    const quizActivationRef = doc(db, `quizActivations`, assignedQuizId); // Parent document
+    const assignedQuizRef = doc(db, `assignedQuizzes/${sessionData.studentProfile.class}/quizzes`, assignedQuizId);
+    const studentSubmissionSummaryRef = doc(db, `students/${studentId}/submissions`, assignedQuizId);
     const batch = writeBatch(db);
 
-    batch.set(submissionRef, analytics, { merge: true });
-    batch.set(studentSubmissionRef, {
-        score: analytics.score,
-        lastAttempted: analytics.lastAttempted,
+    // Ensure the quiz activation parent document exists with at least one field
+    batch.set(quizActivationRef, {
+        initialized: true,
+        createdAt: new Date(),
+        assignedQuizId: assignedQuizId
+    }, { merge: true }); // Use merge to avoid overwriting if it already exists
+
+    // Save submission data to quizActivations
+    batch.set(submissionRef, {
+        studentId: studentId,
+        assignedQuizId: assignedQuizId,
+        sessionData: sessionData,
+        answers: answers,
+        analytics: analytics,
+        startTime: new Date(),
+        endTime: new Date(),
+        studentAttended: true, // Mark student as attended
+        verbalSummary: analytics.verbalSummary
+    });
+
+    // Save submission summary to students collection (required for analytics)
+    batch.set(studentSubmissionSummaryRef, {
+        score: averageScore,
+        lastAttempted: new Date(),
         subjectCode: sessionData.assignment.subjectCode,
         chapterId: sessionData.assignment.chapterId,
         subtopicId: sessionData.assignment.subtopicId,
-    }, { merge: true });
-    batch.update(originalQuizRef, { [`completedBy.${studentId}`]: true });
+        id: assignedQuizId
+    });
+
+    // Mark student as completed in the assigned quiz
+    batch.update(assignedQuizRef, {
+        [`completedBy.${studentId}`]: true
+    });
 
     await batch.commit();
     return analytics;
