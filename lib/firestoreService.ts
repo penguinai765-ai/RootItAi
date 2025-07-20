@@ -186,8 +186,156 @@ export const createQuizAssignment = async (data: {
     if (!userDocSnap.exists()) throw new Error("Cannot assign quiz: Teacher mapping not found.");
     const { schoolCode } = userDocSnap.data();
     if (!schoolCode) throw new Error("Cannot assign quiz: Teacher is not associated with a school.");
-    const assignmentData = { ...details, assignedBy, schoolCode, completedBy: {} };
+    const assignmentData = {
+        ...details,
+        assignedBy,
+        schoolCode,
+        completedBy: {},
+        assignedDate: Timestamp.now(),
+        deadline: Timestamp.fromDate(details.deadline)
+    };
     await addDoc(collection(db, "assignedQuizzes", classCode, "quizzes"), assignmentData);
+};
+
+export const getAssignedQuizzes = async (teacherId: string, dateFilter?: { startDate?: Date; endDate?: Date }) => {
+    const userDocSnap = await getDoc(doc(db, "users", teacherId));
+    if (!userDocSnap.exists()) throw new Error("Teacher user mapping not found.");
+    const { schoolCode, teacherCode } = userDocSnap.data();
+    const teacherProfileSnap = await getDoc(doc(db, `schools/${schoolCode}/teachers`, teacherCode));
+    if (!teacherProfileSnap.exists()) throw new Error("Teacher profile not found.");
+    const classCode = teacherProfileSnap.data().class;
+
+    try {
+        // First, get all quizzes for the class and school
+        const quizzesQuery = query(collection(db, `assignedQuizzes/${classCode}/quizzes`), where("schoolCode", "==", schoolCode));
+        const quizzesSnap = await getDocs(quizzesQuery);
+
+        // Filter in memory to avoid composite index issues
+        let quizzes = quizzesSnap.docs.map(doc => {
+            const data = doc.data();
+            console.log(`Quiz ${doc.id} data:`, data);
+            console.log(`Quiz ${doc.id} assignedDate:`, data.assignedDate?.toDate?.() || data.assignedDate);
+            console.log(`Quiz ${doc.id} deadline:`, data.deadline?.toDate?.() || data.deadline);
+            console.log(`Quiz ${doc.id} assignedDate timestamp:`, data.assignedDate);
+            console.log(`Quiz ${doc.id} deadline timestamp:`, data.deadline);
+
+            return {
+                id: doc.id,
+                ...data,
+                assignedDate: data.assignedDate?.toDate?.() || new Date(),
+                deadline: data.deadline?.toDate?.() || new Date()
+            };
+        });
+
+        // Apply date filtering in memory - filter for exact date match
+        if (dateFilter?.startDate) {
+            const filterDate = dateFilter.startDate;
+            const nextDay = new Date(filterDate);
+            nextDay.setDate(nextDay.getDate() + 1);
+
+            quizzes = quizzes.filter(quiz => {
+                const quizDate = quiz.assignedDate;
+                return quizDate >= filterDate && quizDate < nextDay;
+            });
+        }
+
+        // Get subject, chapter, and subtopic names for each quiz
+        const enhancedQuizzes = await Promise.all(quizzes.map(async (quiz: any) => {
+            try {
+                // Get subject name
+                const subjectDoc = await getDoc(doc(db, "textbook", quiz.subjectCode));
+                const subjectName = subjectDoc.exists() ? (subjectDoc.data()["subject name"] || subjectDoc.data().name || quiz.subjectCode) : quiz.subjectCode;
+
+                // Get chapter name
+                const chapterDoc = await getDoc(doc(db, "textbook", quiz.subjectCode, "chapters", quiz.chapterId));
+                const chapterName = chapterDoc.exists() ? (chapterDoc.data().chaptername || quiz.chapterId) : quiz.chapterId;
+
+                // Get subtopic name
+                const subtopicDoc = await getDoc(doc(db, "textbook", quiz.subjectCode, "chapters", quiz.chapterId, "subtopics", quiz.subtopicId));
+                const subtopicName = subtopicDoc.exists() ? (subtopicDoc.data().title || quiz.subtopicId) : quiz.subtopicId;
+
+                // Calculate completion stats
+                const completedCount = Object.keys(quiz.completedBy || {}).length;
+                const totalStudents = await getDocs(query(collection(db, "students"), where("class", "==", classCode), where("schoolCode", "==", schoolCode)));
+                const totalCount = totalStudents.size;
+
+                return {
+                    ...quiz,
+                    subjectName,
+                    chapterName,
+                    subtopicName,
+                    submitted: completedCount,
+                    total: totalCount,
+                    status: completedCount === totalCount ? "completed" : "active",
+                    due: quiz.deadline || new Date()
+                };
+            } catch (error) {
+                console.error("Error fetching quiz details:", error);
+                return {
+                    ...quiz,
+                    subjectName: quiz.subjectCode || "Unknown",
+                    chapterName: quiz.chapterId || "Unknown",
+                    subtopicName: quiz.subtopicId || "Unknown",
+                    submitted: 0,
+                    total: 0,
+                    status: "active",
+                    due: quiz.deadline || new Date()
+                };
+            }
+        }));
+
+        return enhancedQuizzes.sort((a, b) => b.assignedDate.getTime() - a.assignedDate.getTime());
+    } catch (error) {
+        console.error("Error in getAssignedQuizzes:", error);
+        return [];
+    }
+};
+
+// Migration function to add assignedDate to existing quizzes
+export const migrateQuizAssignedDates = async (teacherId: string) => {
+    const userDocSnap = await getDoc(doc(db, "users", teacherId));
+    if (!userDocSnap.exists()) throw new Error("Teacher user mapping not found.");
+    const { schoolCode, teacherCode } = userDocSnap.data();
+    const teacherProfileSnap = await getDoc(doc(db, `schools/${schoolCode}/teachers`, teacherCode));
+    if (!teacherProfileSnap.exists()) throw new Error("Teacher profile not found.");
+    const classCode = teacherProfileSnap.data().class;
+
+    try {
+        const quizzesQuery = query(collection(db, `assignedQuizzes/${classCode}/quizzes`), where("schoolCode", "==", schoolCode));
+        const quizzesSnap = await getDocs(quizzesQuery);
+
+        const batch = writeBatch(db);
+        let updatedCount = 0;
+
+        quizzesSnap.docs.forEach(doc => {
+            const data = doc.data();
+            if (!data.assignedDate) {
+                console.log(`Migrating quiz ${doc.id} - adding assignedDate`);
+                batch.update(doc.ref, { assignedDate: Timestamp.now() });
+                updatedCount++;
+            } else if (data.assignedDate && data.deadline &&
+                data.assignedDate.toDate?.()?.getTime() === data.deadline.toDate?.()?.getTime()) {
+                // If assigned date and deadline are the same, update assigned date to be earlier
+                console.log(`Migrating quiz ${doc.id} - fixing assigned date to be earlier than deadline`);
+                const deadlineDate = data.deadline.toDate();
+                const assignedDate = new Date(deadlineDate.getTime() - (24 * 60 * 60 * 1000)); // 1 day earlier
+                batch.update(doc.ref, { assignedDate: Timestamp.fromDate(assignedDate) });
+                updatedCount++;
+            }
+        });
+
+        if (updatedCount > 0) {
+            await batch.commit();
+            console.log(`Migrated ${updatedCount} quizzes with assignedDate`);
+        } else {
+            console.log("No quizzes need migration");
+        }
+
+        return updatedCount;
+    } catch (error) {
+        console.error("Error migrating quiz assigned dates:", error);
+        throw error;
+    }
 };
 
 
@@ -427,49 +575,354 @@ export const getTeacherAnalytics = async (teacherId: string) => {
     const teacherProfileSnap = await getDoc(doc(db, `schools/${schoolCode}/teachers`, teacherCode));
     if (!teacherProfileSnap.exists()) throw new Error("Teacher profile not found.");
     const classCode = teacherProfileSnap.data().class;
-    const subjectCode = teacherCode.subjectCode;
+    const subjectCode = teacherProfileSnap.data().subjectCode;
+
+    // Get all students in the teacher's class
     const studentsSnap = await getDocs(query(collection(db, "students"), where("class", "==", classCode), where("schoolCode", "==", schoolCode)));
     const studentList = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() as any }));
-    const submissionPromises = studentList.map(student => getDocs(collection(db, `students/${student.id}/submissions`)));
-    const submissionSnaps = await Promise.all(submissionPromises);
-    const allSubmissions: (SubmissionSummary & { studentId: string })[] = [];
-    submissionSnaps.forEach((snap, index) => {
-        const studentId = studentList[index].id;
-        snap.forEach(subDoc => { allSubmissions.push({ studentId, ...(subDoc.data() as SubmissionSummary) }); });
-    });
-    const textbookCache = new Map<string, string>();
-    const subjectsSnap = await getDocs(collection(db, 'textbook'));
-    for (const subjectDoc of subjectsSnap.docs) {
-        const chaptersSnap = await getDocs(collection(db, `textbook/${subjectDoc.id}/chapters`));
-        for (const chapterDoc of chaptersSnap.docs) {
-            textbookCache.set(chapterDoc.id, chapterDoc.data().chaptername);
+
+    // Get all quiz submissions for these students
+    const allSubmissions: any[] = [];
+    const studentAnalytics: any[] = [];
+
+    // Fetch submissions from quizActivations (new flow)
+    const quizActivationsRef = collection(db, "quizActivations");
+    const quizActivationsSnap = await getDocs(quizActivationsRef);
+
+    for (const quizActivationDoc of quizActivationsSnap.docs) {
+        const quizId = quizActivationDoc.id;
+        const submissionsRef = collection(db, `quizActivations/${quizId}/submissions`);
+        const submissionsSnap = await getDocs(submissionsRef);
+
+        for (const submissionDoc of submissionsSnap.docs) {
+            const submissionData = submissionDoc.data();
+            const studentId = submissionDoc.id;
+
+            // Check if this student is in the teacher's class
+            const student = studentList.find(s => s.id === studentId);
+            if (student && submissionData.sessionData?.assignment?.subjectCode === subjectCode) {
+                allSubmissions.push({
+                    studentId,
+                    score: submissionData.analytics?.score || 0,
+                    lastAttempted: submissionData.endTime || new Date(),
+                    subjectCode: submissionData.sessionData?.assignment?.subjectCode,
+                    chapterId: submissionData.sessionData?.assignment?.chapterId || "Unknown",
+                    subtopicId: submissionData.sessionData?.assignment?.subtopicId || "Unknown",
+                    analysis: submissionData.analysis || null,
+                    cognitiveAverages: submissionData.analytics?.cognitiveAverages || {},
+                    errorPatterns: submissionData.analysis?.errorPatterns || []
+                });
+            }
         }
     }
-    const chapterAnalyticsMap = new Map<string, number[]>();
-    const subtopicAnalyticsMap = new Map<string, { scores: number[], parentChapter: string }>();
-    allSubmissions.forEach(summary => {
-        const chapterName = textbookCache.get(summary.chapterId) || summary.chapterId;
-        const subtopicName = "Placeholder";
-        const chapScores = chapterAnalyticsMap.get(chapterName) || [];
-        chapScores.push(summary.score);
-        chapterAnalyticsMap.set(chapterName, chapScores);
-        const subData = subtopicAnalyticsMap.get(subtopicName) || { scores: [], parentChapter: chapterName };
-        subData.scores.push(summary.score);
-        subtopicAnalyticsMap.set(subtopicName, subData);
-    });
-    const chapterPerformance = Array.from(chapterAnalyticsMap.entries()).map(([name, scores]) => ({ name, averageScore: scores.reduce((a, b) => a + b, 0) / scores.length }));
-    const subtopicPerformance = Array.from(subtopicAnalyticsMap.entries()).map(([name, data]) => ({ name, averageScore: data.scores.reduce((a, b) => a + b, 0) / data.scores.length, parentChapter: data.parentChapter }));
-    const processedStudentList = studentList.map(student => {
+
+    // Get textbook data for chapter/subtopic names
+    const textbookCache = new Map<string, { name: string; domain: string; subjectCode: string; subjectName: string; }>();
+    const subjectsSnap = await getDocs(collection(db, 'textbook'));
+    for (const subjectDoc of subjectsSnap.docs) {
+        const subjectCode = subjectDoc.id;
+        const subjectName = subjectDoc.data()["subject name"] || subjectDoc.data().name || "Unnamed Subject";
+        const chaptersSnap = await getDocs(collection(db, `textbook/${subjectCode}/chapters`));
+        for (const chapterDoc of chaptersSnap.docs) {
+            const chapData = chapterDoc.data();
+            textbookCache.set(chapterDoc.id, {
+                name: chapData.chaptername || "Unnamed Chapter",
+                domain: chapData.domain || "Uncategorized",
+                subjectCode: subjectCode,
+                subjectName: subjectName
+            });
+        }
+    }
+
+    // Process student analytics
+    for (const student of studentList) {
         const studentSubmissions = allSubmissions.filter(s => s.studentId === student.id);
-        const overallScore = studentSubmissions.reduce((sum, s) => sum + s.score, 0) / (studentSubmissions.length || 1);
-        return { id: student.id, name: student.name, division: student.division, overallScore: parseFloat(overallScore.toFixed(1) || "0") };
+
+        if (studentSubmissions.length > 0) {
+            // Calculate chapter-wise performance
+            const chapterPerformance = new Map<string, number[]>();
+            const subtopicPerformance = new Map<string, number[]>();
+
+            studentSubmissions.forEach(sub => {
+                const chapterName = textbookCache.get(sub.chapterId)?.name || sub.chapterId;
+                const chapterScores = chapterPerformance.get(chapterName) || [];
+                chapterScores.push(sub.score);
+                chapterPerformance.set(chapterName, chapterScores);
+
+                const subtopicScores = subtopicPerformance.get(sub.subtopicId) || [];
+                subtopicScores.push(sub.score);
+                subtopicPerformance.set(sub.subtopicId, subtopicScores);
+            });
+
+            // Calculate averages
+            const chapterAverages = Array.from(chapterPerformance.entries()).map(([name, scores]) => ({
+                name,
+                averageScore: scores.reduce((a, b) => a + b, 0) / scores.length
+            }));
+
+            const subtopicAverages = Array.from(subtopicPerformance.entries()).map(([id, scores]) => ({
+                id,
+                averageScore: scores.reduce((a, b) => a + b, 0) / scores.length
+            }));
+
+            // Calculate cognitive skills average
+            const cognitiveSkills = {
+                conceptual: 0,
+                reasoning: 0,
+                confidence: 0,
+                application: 0,
+                analysis: 0
+            };
+
+            let cognitiveCount = 0;
+            studentSubmissions.forEach(sub => {
+                if (sub.analysis) {
+                    if (sub.analysis.conceptualUnderstanding) {
+                        cognitiveSkills.conceptual += sub.analysis.conceptualUnderstanding === "Strong" ? 100 : sub.analysis.conceptualUnderstanding === "Moderate" ? 60 : 30;
+                        cognitiveCount++;
+                    }
+                    if (sub.analysis.reasoningSkill) {
+                        cognitiveSkills.reasoning += sub.analysis.reasoningSkill === "Logical" ? 100 : sub.analysis.reasoningSkill === "Superficial" ? 60 : 30;
+                        cognitiveCount++;
+                    }
+                    if (sub.analysis.confidenceScore) {
+                        cognitiveSkills.confidence += sub.analysis.confidenceScore === "High" ? 100 : sub.analysis.confidenceScore === "Medium" ? 60 : 30;
+                        cognitiveCount++;
+                    }
+                }
+            });
+
+            if (cognitiveCount > 0) {
+                Object.keys(cognitiveSkills).forEach(key => {
+                    cognitiveSkills[key as keyof typeof cognitiveSkills] /= cognitiveCount;
+                });
+            }
+
+            const overallScore = studentSubmissions.reduce((sum, s) => sum + s.score, 0) / studentSubmissions.length;
+
+            studentAnalytics.push({
+                id: student.id,
+                name: student.name,
+                rollNumber: student.rollNumber,
+                division: student.division,
+                overallScore: parseFloat(overallScore.toFixed(1)),
+                chapterPerformance: chapterAverages,
+                subtopicPerformance: subtopicAverages,
+                cognitiveSkills,
+                errorPatterns: studentSubmissions.flatMap(s => s.errorPatterns || []),
+                quizzesTaken: studentSubmissions.length
+            });
+        }
+    }
+
+    // Calculate summary metrics
+    const totalStudents = studentList.length;
+    const averageScore = studentAnalytics.length > 0 ?
+        studentAnalytics.reduce((sum, s) => sum + s.overallScore, 0) / studentAnalytics.length : 0;
+
+    // Calculate class improvement (compare current vs previous 5 quizzes average)
+    const allScores = allSubmissions.map(s => s.score).sort((a, b) => b - a);
+    const currentAverage = allScores.slice(0, Math.min(5, allScores.length)).reduce((sum, score) => sum + score, 0) / Math.min(5, allScores.length);
+    const previousAverage = allScores.slice(5, Math.min(10, allScores.length)).reduce((sum, score) => sum + score, 0) / Math.max(1, Math.min(5, allScores.length - 5));
+    const classImprovement = previousAverage > 0 ? ((currentAverage - previousAverage) / previousAverage) * 100 : 0;
+
+    // Get assigned quizzes count
+    const assignedQuizzesQuery = query(collection(db, `assignedQuizzes/${classCode}/quizzes`), where("schoolCode", "==", schoolCode));
+    const assignedQuizzesSnap = await getDocs(assignedQuizzesQuery);
+    const quizzesTaken = assignedQuizzesSnap.size;
+
+    // Calculate chapter-wise performance
+    const chapterAnalyticsMap = new Map<string, number[]>();
+    allSubmissions.forEach(sub => {
+        const chapterName = textbookCache.get(sub.chapterId)?.name || sub.chapterId;
+        const scores = chapterAnalyticsMap.get(chapterName) || [];
+        scores.push(sub.score);
+        chapterAnalyticsMap.set(chapterName, scores);
     });
+
+    const chapterPerformance = Array.from(chapterAnalyticsMap.entries()).map(([name, scores]) => ({
+        name,
+        averageScore: scores.reduce((a, b) => a + b, 0) / scores.length,
+        struggling: Math.round((scores.filter(s => s < 50).length / scores.length) * 100)
+    }));
+
+    // Find best and worst performing students for cognitive skills
+    const sortedStudents = studentAnalytics.sort((a, b) => b.overallScore - a.overallScore);
+    const bestStudent = sortedStudents[0];
+    const worstStudent = sortedStudents[sortedStudents.length - 1];
+
+    // Calculate cognitive skills distribution (class average)
+    const cognitiveSkillsDistribution = [
+        { skill: "Conceptual", value: studentAnalytics.reduce((sum, s) => sum + s.cognitiveSkills.conceptual, 0) / studentAnalytics.length },
+        { skill: "Reasoning", value: studentAnalytics.reduce((sum, s) => sum + s.cognitiveSkills.reasoning, 0) / studentAnalytics.length },
+        { skill: "Application", value: studentAnalytics.reduce((sum, s) => sum + s.cognitiveSkills.application, 0) / studentAnalytics.length },
+        { skill: "Analysis", value: studentAnalytics.reduce((sum, s) => sum + s.cognitiveSkills.analysis, 0) / studentAnalytics.length },
+        { skill: "Confidence", value: studentAnalytics.reduce((sum, s) => sum + s.cognitiveSkills.confidence, 0) / studentAnalytics.length },
+    ];
+
+    // Find common mistakes
+    const allErrorPatterns = allSubmissions.flatMap(s => s.errorPatterns || []);
+    const errorCounts = allErrorPatterns.reduce((acc, error) => {
+        acc[error] = (acc[error] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const commonMistakes = Object.entries(errorCounts)
+        .sort(([, a], [, b]) => (b as number) - (a as number))
+        .slice(0, 4)
+        .map(([text, count]) => ({
+            text,
+            severity: (count as number) > totalStudents * 0.5 ? "High" : (count as number) > totalStudents * 0.3 ? "Medium" : "Low",
+            percent: Math.round(((count as number) / totalStudents) * 100)
+        }));
+
+    // Find students needing attention (any subtopic < 50%)
+    const needsAttention = await Promise.all(studentAnalytics
+        .filter(student => student.subtopicPerformance.some((sub: any) => sub.averageScore < 50))
+        .map(async student => {
+            // For each struggling subtopic, include id, name, averageScore, parentChapter, errors, and trend
+            const strugglingSubtopics = await Promise.all(
+                student.subtopicPerformance
+                    .filter((sub: any) => sub.averageScore < 50)
+                    .map(async (sub: any) => {
+                        // Resolve subtopic name and parent chapter from Firestore if not present
+                        let subtopicName = sub.name;
+                        let parentChapter = sub.parentChapter || '';
+                        let chapterId = '';
+                        if (!subtopicName || !parentChapter) {
+                            // Try to find the submission for this subtopic to get chapterId
+                            const submission = allSubmissions.find(s => s.studentId === student.id && s.subtopicId === sub.id);
+                            if (submission) {
+                                chapterId = submission.chapterId;
+                                if (!parentChapter && textbookCache.has(chapterId)) {
+                                    parentChapter = textbookCache.get(chapterId)?.name || '';
+                                }
+                                if (!subtopicName && chapterId && submission.subjectCode) {
+                                    // Fetch subtopic name from Firestore
+                                    try {
+                                        const subtopicDoc = await getDoc(doc(db, `textbook/${submission.subjectCode}/chapters/${chapterId}/subtopics/${sub.id}`));
+                                        if (subtopicDoc.exists()) {
+                                            subtopicName = subtopicDoc.data().title || sub.id;
+                                        }
+                                    } catch (e) {
+                                        // fallback to id
+                                    }
+                                }
+                            }
+                        }
+                        // Collect all performance scores for this subtopic for this student
+                        const subtopicSubmissions = allSubmissions.filter(s => s.studentId === student.id && s.subtopicId === sub.id);
+                        const trend = subtopicSubmissions.map(s => ({
+                            date: s.lastAttempted?.toDate?.() ? s.lastAttempted.toDate().toLocaleDateString() : new Date(s.lastAttempted).toLocaleDateString(),
+                            score: s.score
+                        }));
+                        // Collect all error patterns for this subtopic for this student
+                        let errors: any[] = [];
+                        subtopicSubmissions.forEach(s => {
+                            // Get errors from the quiz analysis for this specific submission
+                            if (s.analysis && s.analysis.errorPatterns && Array.isArray(s.analysis.errorPatterns)) {
+                                // Debug: log the error patterns to see their structure
+                                console.log(`Error patterns for subtopic ${sub.id}:`, s.analysis.errorPatterns);
+
+                                // Only include errors that are relevant to this subtopic
+                                // Since we're already filtering by subtopic submissions, these errors should be relevant
+                                // But we can add additional filtering if error patterns have subtopic info
+                                const relevantErrors = s.analysis.errorPatterns.filter((err: any) => {
+                                    // If error has subtopic info, check if it matches
+                                    if (err.subtopicId && err.subtopicId !== sub.id) {
+                                        return false;
+                                    }
+                                    if (err.subtopic && err.subtopic !== sub.name) {
+                                        return false;
+                                    }
+                                    // If no subtopic info, include it (since it's from this subtopic's submission)
+                                    return true;
+                                });
+
+                                errors.push(...relevantErrors);
+                            }
+                        });
+                        // Deduplicate errors (by string or by .text property)
+                        const seen = new Set();
+                        errors = errors.filter(err => {
+                            const key = typeof err === 'string' ? err : err.text || JSON.stringify(err);
+                            if (seen.has(key)) return false;
+                            seen.add(key);
+                            return true;
+                        });
+
+                        console.log(`Final errors for subtopic ${sub.id}:`, errors);
+                        return {
+                            id: sub.id,
+                            name: subtopicName || sub.id,
+                            averageScore: sub.averageScore,
+                            parentChapter: parentChapter || '',
+                            errors,
+                            trend
+                        };
+                    })
+            );
+            return {
+                ...student,
+                strugglingSubtopics
+            };
+        }));
+
+    // Find top performers (all subtopics > 50% and overall > 85%)
+    const topPerformers = studentAnalytics
+        .filter(student =>
+            student.subtopicPerformance.every((sub: any) => sub.averageScore > 50) &&
+            student.overallScore > 85
+        )
+        .slice(0, 5);
+
+    // Enhanced student leaderboard with all required data
+    const enhancedStudentList = studentAnalytics.map(student => {
+        const bestChapter = student.chapterPerformance.reduce((a: any, b: any) => a.averageScore > b.averageScore ? a : b);
+        const worstChapter = student.chapterPerformance.reduce((a: any, b: any) => a.averageScore < b.averageScore ? a : b);
+
+        return {
+            ...student,
+            bestChapter: bestChapter.name,
+            worstChapter: worstChapter.name,
+            bestChapterScore: bestChapter.averageScore,
+            worstChapterScore: worstChapter.averageScore,
+            commonErrors: student.errorPatterns.slice(0, 3)
+        };
+    });
+
     return {
-        classAverage: allSubmissions.reduce((sum, s) => sum + s.score, 0) / (allSubmissions.length || 1),
-        studentList: processedStudentList,
-        chapterPerformance,
-        subtopicPerformance,
+        // Summary cards data
+        summary: {
+            averageScore: Math.round(averageScore),
+            quizzesTaken,
+            classImprovement: Math.round(classImprovement),
+            totalStudents
+        },
+        // Add subjectCode for teacher
         subjectCode,
+        // Cognitive skills distribution
+        cognitiveSkillsDistribution,
+        bestStudent,
+        worstStudent,
+
+        // Common mistakes
+        commonMistakes,
+
+        // Student lists
+        needsAttention,
+        topPerformers,
+
+        // Chapter performance
+        chapterPerformance,
+
+        // Enhanced student leaderboard
+        studentList: enhancedStudentList,
+
+        // Filter options
+        divisions: [...new Set(studentList.map(s => s.division))],
+        chapters: chapterPerformance.map(c => c.name),
+        commonErrors: [...new Set(allErrorPatterns)]
     };
 };
 
@@ -527,6 +980,23 @@ export const getUserProfile = async (uid: string) => {
 };
 
 // --- Subject-Specific Analytics Functions ---
+
+export const getQuizSubmissions = async (quizId: string) => {
+    try {
+        const submissionsRef = collection(db, `quizActivations/${quizId}/submissions`);
+        const submissionsSnap = await getDocs(submissionsRef);
+
+        const submissions = submissionsSnap.docs.map(doc => ({
+            studentId: doc.id,
+            ...doc.data()
+        }));
+
+        return submissions;
+    } catch (error) {
+        console.error("Error fetching quiz submissions:", error);
+        return [];
+    }
+};
 
 export const getStudentSubjectAnalytics = async (uid: string, subjectCode: string) => {
     console.log(`Getting subject analytics for ${uid} in ${subjectCode}`);
@@ -729,6 +1199,16 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
 
     const chapterPerformance = await Promise.all(chapterPerformancePromises);
 
+    // Flatten all subtopics from all chapters into a single array
+    const subtopicPerformance = chapterPerformance.flatMap(chapter =>
+        (chapter.subtopics || []).map(sub => ({
+            id: sub.id,
+            name: sub.name,
+            averageScore: sub.averageScore,
+            parentChapter: chapter.name
+        }))
+    );
+
     // Generate cognitive insights
     const cognitiveInsights = [];
     const allAnalysis = subjectSubmissions.filter(sub => sub.analysis).map(sub => sub.analysis);
@@ -790,6 +1270,7 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
             change: { score: Math.round(scoreChange), quizzes: Math.round(quizChange) }
         },
         chapterPerformance,
+        subtopicPerformance, // <-- add this line
         progressOverTime: (() => {
             // Calculate progress over time with quiz attempt index and cumulative averages
             const progressOverTime: any[] = [];
@@ -848,3 +1329,127 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
         weaknesses
     }
 }
+
+export const getStudentSubtopicProgress = async (studentId: string, subtopicName: string) => {
+    try {
+        console.log('=== SUBTOPIC PROGRESS DEBUG ===');
+        console.log('Student ID:', studentId);
+        console.log('Searching for subtopic:', subtopicName);
+
+        // Get student analytics
+        const analytics = await getStudentAnalytics(studentId);
+        console.log('Analytics object keys:', Object.keys(analytics));
+        console.log('Subtopic trends keys:', analytics.subtopicTrends ? Object.keys(analytics.subtopicTrends) : 'No subtopic trends');
+
+        if (!analytics.subtopicTrends) {
+            console.log('No subtopic trends found');
+            return {
+                progress: [],
+                improvement: 'stable' as const,
+                averageScore: 0,
+                totalAttempts: 0
+            };
+        }
+
+        // Try exact match first
+        let progressData = (analytics.subtopicTrends as Record<string, { date: string; score: number }[]>)[subtopicName];
+
+        // If exact match fails, try case-insensitive match
+        if (!progressData) {
+            console.log('Exact match failed, trying case-insensitive match');
+            const subtopicKeys = Object.keys(analytics.subtopicTrends);
+            const matchedKey = subtopicKeys.find(key =>
+                key.toLowerCase() === subtopicName.toLowerCase() ||
+                key.toLowerCase().includes(subtopicName.toLowerCase()) ||
+                subtopicName.toLowerCase().includes(key.toLowerCase())
+            );
+
+            if (matchedKey) {
+                console.log('Found match:', matchedKey);
+                progressData = (analytics.subtopicTrends as Record<string, { date: string; score: number }[]>)[matchedKey];
+            } else {
+                console.log('No match found. Available subtopics:', subtopicKeys);
+
+                // Try to find data in detailedAnalysisHistory as fallback
+                if (analytics.detailedAnalysisHistory && analytics.detailedAnalysisHistory.length > 0) {
+                    console.log('Trying to find data in detailedAnalysisHistory');
+                    const matchingEntries = analytics.detailedAnalysisHistory.filter((entry: any) => {
+                        const entrySubtopic = entry.subtopicId || entry.subtopicName || '';
+                        return entrySubtopic.toLowerCase().includes(subtopicName.toLowerCase()) ||
+                            subtopicName.toLowerCase().includes(entrySubtopic.toLowerCase());
+                    });
+
+                    if (matchingEntries.length > 0) {
+                        console.log('Found matching entries in detailedAnalysisHistory:', matchingEntries.length);
+                        progressData = matchingEntries.map((entry: any) => ({
+                            date: new Date(entry.date).toLocaleDateString(),
+                            score: entry.analysis?.performanceScore || entry.score || 0
+                        }));
+                    }
+                }
+            }
+        }
+
+        if (!progressData || progressData.length === 0) {
+            console.log('No progress data found for this subtopic');
+
+            // For demonstration purposes, let's check if we have any data at all
+            if (analytics.subtopicTrends && Object.keys(analytics.subtopicTrends).length > 0) {
+                console.log('Available subtopics with data:', Object.keys(analytics.subtopicTrends));
+                // Return the first available subtopic data as a fallback
+                const firstSubtopicKey = Object.keys(analytics.subtopicTrends)[0];
+                const fallbackData = (analytics.subtopicTrends as Record<string, { date: string; score: number }[]>)[firstSubtopicKey];
+                console.log('Using fallback data from:', firstSubtopicKey);
+
+                return {
+                    progress: fallbackData,
+                    improvement: 'stable' as const,
+                    averageScore: Math.round(fallbackData.reduce((sum: number, item: { date: string; score: number }) => sum + item.score, 0) / fallbackData.length),
+                    totalAttempts: fallbackData.length
+                };
+            }
+
+            return {
+                progress: [],
+                improvement: 'stable' as const,
+                averageScore: 0,
+                totalAttempts: 0
+            };
+        }
+
+        // Calculate improvement trend
+        let improvement: 'improving' | 'declining' | 'stable' = 'stable';
+        if (progressData.length >= 2) {
+            const recentScores = progressData.slice(-3); // Last 3 attempts
+            const olderScores = progressData.slice(0, Math.max(0, progressData.length - 3)); // Earlier attempts
+
+            if (recentScores.length > 0 && olderScores.length > 0) {
+                const recentAverage = recentScores.reduce((sum: number, item: { date: string; score: number }) => sum + item.score, 0) / recentScores.length;
+                const olderAverage = olderScores.reduce((sum: number, item: { date: string; score: number }) => sum + item.score, 0) / olderScores.length;
+
+                if (recentAverage > olderAverage + 5) {
+                    improvement = 'improving';
+                } else if (recentAverage < olderAverage - 5) {
+                    improvement = 'declining';
+                }
+            }
+        }
+
+        const averageScore = progressData.reduce((sum: number, item: { date: string; score: number }) => sum + item.score, 0) / progressData.length;
+
+        return {
+            progress: progressData,
+            improvement,
+            averageScore: Math.round(averageScore),
+            totalAttempts: progressData.length
+        };
+    } catch (error) {
+        console.error('Error fetching subtopic progress:', error);
+        return {
+            progress: [],
+            improvement: 'stable' as const,
+            averageScore: 0,
+            totalAttempts: 0
+        };
+    }
+};

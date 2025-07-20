@@ -184,20 +184,20 @@ You are an expert AI tutor creating a personalized, adaptive quiz for a high-sch
   - 'requestConfidenceRating' boolean (true if the student should rate their confidence after this question)
 - Cognitive scores should be between 0.1 and 1.0.
 - Output ONLY the JSON for the single question, nothing else.
-`;
+    `;
     const userPrompt = `
-Context:
-- Subject: ${context.subject}
-- Chapter: ${context.chapter}
-- Subtopic: ${context.subtopic}
-- Desired Difficulty (0.0 to 1.0): ${difficulty.toFixed(1)}
+        Context:
+        - Subject: ${context.subject}
+        - Chapter: ${context.chapter}
+        - Subtopic: ${context.subtopic}
+        - Desired Difficulty (0.0 to 1.0): ${difficulty.toFixed(1)}
 - Skill summary (previous, current): ${JSON.stringify(skillSummary)}
-
-Learning Material to Base the Question On:
----
-${context.subtopicContent}
----
-`;
+        
+        Learning Material to Base the Question On:
+        ---
+        ${context.subtopicContent}
+        ---
+    `;
     return { systemPrompt, userPrompt };
 }
 
@@ -247,7 +247,7 @@ The performanceScore should be computed using: number of correct/wrong answers, 
                 { role: 'user', content: prompt.userPrompt }
             ],
             temperature: 0.7,
-            max_tokens: 1000,
+            max_tokens: 3000,
         })
     });
     if (!response.ok) {
