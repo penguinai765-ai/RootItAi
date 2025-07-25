@@ -47,6 +47,7 @@ import {
     BarChart4,
     ListChecks,
 } from "lucide-react";
+import LoadingLottie from "@/components/LoadingLottie";
 
 export default function SubjectAnalyticsPage() {
     const { user } = useAuth();
@@ -169,11 +170,11 @@ export default function SubjectAnalyticsPage() {
 
             <div className="max-w-7xl mx-auto p-3 md:p-6 space-y-6 pb-20 md:pb-6">
                 {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="bg-gradient-to-br from-blue-100 via-blue-50 to-cyan-50 p-4 rounded-2xl border-2 border-blue-200 shadow-lg">
                         <div className="flex items-center gap-2 mb-3">
                             <Target className="w-5 h-5 text-blue-600" />
-                            <span className="text-sm text-blue-700 font-semibold">Average Score</span>
+                            <span className="text-sm text-blue-700 font-semibold">Subject Average Score</span>
                         </div>
                         <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
                             {analytics.summary.averageScore}%
@@ -197,16 +198,6 @@ export default function SubjectAnalyticsPage() {
                         </div>
                         <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
                             {analytics.summary.improvementRate > 0 ? '+' : ''}{analytics.summary.improvementRate}%
-                        </div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-orange-100 via-orange-50 to-yellow-50 p-4 rounded-2xl border-2 border-orange-200 shadow-lg">
-                        <div className="flex items-center gap-2 mb-3">
-                            <Clock className="w-5 h-5 text-orange-600" />
-                            <span className="text-sm text-orange-700 font-semibold">Time Efficiency</span>
-                        </div>
-                        <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-orange-600 to-yellow-600 bg-clip-text text-transparent">
-                            {analytics.summary.timeEfficiency}m
                         </div>
                     </div>
                 </div>
@@ -320,11 +311,11 @@ export default function SubjectAnalyticsPage() {
                                                     <div className="space-y-1 text-sm">
                                                         <div className="flex items-center gap-2">
                                                             <CheckCircle className="w-4 h-4 text-green-600" />
-                                                            <span className="text-green-700">Strongest: <strong>{chapter.strongest}</strong></span>
+                                                            <span className="text-green-700">Strongest: <strong>{chapter.strongest !== 'N/A' ? chapter.strongest : 'N/A'}</strong></span>
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <AlertCircle className="w-4 h-4 text-red-600" />
-                                                            <span className="text-red-700">Needs Work: <strong>{chapter.weakest}</strong></span>
+                                                            <span className="text-red-700">Needs Work: <strong>{chapter.needsWork && chapter.needsWork.length > 0 ? chapter.needsWork.join(', ') : 'No subtopics need work!'}</strong></span>
                                                         </div>
                                                     </div>
                                                 </div>

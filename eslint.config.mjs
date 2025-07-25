@@ -11,6 +11,19 @@ const compat = new FlatCompat({
 
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
+  {
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      // Disallow passing raw response to logFetchResponse (must use .clone())
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.name='logFetchResponse'] > Identifier.arguments:first-child[name='response']",
+          message: "You must use response.clone() when passing to logFetchResponse to avoid locking the body stream."
+        }
+      ]
+    },
+  },
 ];
 
 export default eslintConfig;

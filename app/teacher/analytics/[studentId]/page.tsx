@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import LoadingLottie from "@/components/LoadingLottie";
 
 interface StudentInfo {
     name: string;
@@ -48,7 +49,7 @@ export default function StudentDrilldownPage() {
             if (studentId) {
                 const studentRef = doc(db, "students", studentId);
                 const studentSnap = await getDoc(studentRef);
-                if(studentSnap.exists()) {
+                if (studentSnap.exists()) {
                     setStudentInfo(studentSnap.data() as StudentInfo);
                 }
             }
@@ -67,8 +68,8 @@ export default function StudentDrilldownPage() {
                 </h1>
                 {studentInfo && <p className="text-gray-600">Class: {studentInfo.class}</p>}
             </div>
-            
-            <Suspense fallback={<div>Loading student details...</div>}>
+
+            <Suspense fallback={<div><LoadingLottie message="Loading student details..." /></div>}>
                 <AnalyticsView />
             </Suspense>
         </div>

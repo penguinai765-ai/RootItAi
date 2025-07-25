@@ -1,0 +1,36 @@
+{
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "function": "nextApp"
+      }
+    ]
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "predeploy": [
+        "npm run build",
+        "npx cpx \".next/**\" functions/.next",
+        "npx cpx \"app/**\" functions/app",
+        "npx cpx \"next.config.js\" functions/",
+        "npx cpx \"tsconfig.json\" functions/"
+      ],
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ]
+}

@@ -127,9 +127,10 @@ const StudentAnalyticsDashboard = ({ studentId }: StudentAnalyticsDashboardProps
         <>
             {modalData && (
                 <SubtopicTrendModal
-                    subtopicName={modalData.name}
-                    trendData={modalData.data}
+                    isOpen={!!modalData}
                     onClose={() => setModalData(null)}
+                    chapterData={modalData} // or the correct chapter/subtopic data object
+                    subjectName={modalData.name}
                 />
             )}
             <div className="space-y-8">

@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
-import { getTeacherDashboardData, getAssignedQuizzes, migrateQuizAssignedDates } from '@/lib/firestoreService';
+import { getTeacherDashboardData, getAssignedQuizzes, migrateQuizAssignedDates, getClassRatingsForDate } from '@/lib/firestoreService';
 import LogoutButton from '@/components/dashboard/LogoutButton';
 import Button from '@/components/Button';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   BookOpen,
   FileText,
@@ -24,8 +25,16 @@ import {
   ArrowRight,
   Eye,
   Edit,
-  Trash2
+  Trash2,
+  Star
 } from 'lucide-react';
+import LoadingLottie from "@/components/LoadingLottie";
+import Card from '@/components/dashboard/Card';
+import Modal from 'react-modal';
+import { useMemo } from 'react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area } from 'recharts';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { getFirestore } from '@/lib/firebase';
 
 interface DashboardData {
   teacherName: string;
@@ -34,6 +43,7 @@ interface DashboardData {
   classCode: string;
   activeQuizzesCount: number;
   studentCount: number;
+  subjectCode: string; // Add this line
 }
 
 interface QuizData {
@@ -83,6 +93,12 @@ export default function TeacherDashboard() {
   const [error, setError] = useState('');
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [filterDate, setFilterDate] = useState('');
+  const [viewResultsLoading, setViewResultsLoading] = useState<string | null>(null); // quizId or null
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackStats, setFeedbackStats] = useState<{ average: number, count: number } | null>(null);
+  const [feedbackHistory, setFeedbackHistory] = useState<any[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     if (user) {
@@ -111,6 +127,74 @@ export default function TeacherDashboard() {
       fetchData();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (data?.subjectCode) {
+      setFeedbackLoading(true);
+      // Get today's local date string (YYYY-MM-DD)
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${yyyy}-${mm}-${dd}`;
+
+      // Fetch all student IDs
+      (async () => {
+        try {
+          const studentsSnap = await getDocs(collection(getFirestore(), 'students'));
+          const studentIds = studentsSnap.docs.map(doc => doc.id);
+
+          // --- Fetch today's feedback for the card ---
+          let todayRatings: number[] = [];
+          for (const studentId of studentIds) {
+            const ratingDocRef = doc(getFirestore(), `classRating/${data.subjectCode}/dailyRatings/${todayStr}/studentRatings/${studentId}`);
+            const ratingDocSnap = await getDoc(ratingDocRef);
+            if (ratingDocSnap.exists()) {
+              const rating = ratingDocSnap.data().rating;
+              if (typeof rating === 'number') {
+                todayRatings.push(rating);
+              }
+            }
+          }
+          const todayCount = todayRatings.length;
+          const todayAverage = todayCount > 0 ? todayRatings.reduce((a, b) => a + b, 0) / todayCount : 0;
+          setFeedbackStats({ average: todayAverage, count: todayCount });
+
+          // --- Fetch feedback history for the graph ---
+          const dailyRatingsRef = collection(getFirestore(), `classRating/${data.subjectCode}/dailyRatings`);
+          const dailySnaps = await getDocs(dailyRatingsRef);
+          const allDates = dailySnaps.docs.map(doc => doc.id);
+          const history: any[] = [];
+          for (const date of allDates) {
+            let ratings: number[] = [];
+            for (const studentId of studentIds) {
+              const ratingDocRef = doc(getFirestore(), `classRating/${data.subjectCode}/dailyRatings/${date}/studentRatings/${studentId}`);
+              const ratingDocSnap = await getDoc(ratingDocRef);
+              if (ratingDocSnap.exists()) {
+                const rating = ratingDocSnap.data().rating;
+                if (typeof rating === 'number') {
+                  ratings.push(rating);
+                }
+              }
+            }
+            const count = ratings.length;
+            const average = count > 0 ? ratings.reduce((a, b) => a + b, 0) / count : 0;
+            if (count > 0) {
+              history.push({ date, average, count });
+            }
+          }
+          history.sort((a, b) => a.date.localeCompare(b.date));
+          setFeedbackHistory(history);
+        } catch (err) {
+          setFeedbackStats(null);
+          setFeedbackHistory([]);
+          console.error('[ClassRating] Error fetching feedback data:', err);
+        } finally {
+          setFeedbackLoading(false);
+        }
+      })();
+    }
+  }, [data?.subjectCode]);
 
   const handleFilterQuizzes = async () => {
     if (!user || !filterDate) return;
@@ -152,8 +236,7 @@ export default function TeacherDashboard() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading your dashboard...</p>
+          <LoadingLottie message="Loading your dashboard..." />
         </div>
       </div>
     );
@@ -188,21 +271,24 @@ export default function TeacherDashboard() {
   const totalStudents = quizzes.reduce((sum, q) => sum + q.total, 0);
   const averageSubmissionRate = totalStudents > 0 ? Math.round((totalSubmissions / totalStudents) * 100) : 0;
 
+  // Before rendering the graph modal, add a debug log
+  console.log('[ClassRating] feedbackHistory for graph:', feedbackHistory);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-14"> {/* Reduce height from h-16 to h-14 */}
             <div className="flex-1">
-              <h1 className="text-xl font-bold text-gray-900">Welcome back, {data.teacherName}</h1>
-              <p className="text-sm text-gray-600">{data.schoolName} • {data.subject} • Class {data.classCode}</p>
+              <h1 className="text-lg font-bold text-gray-900">Welcome back, {data.teacherName}</h1> {/* Reduce text size */}
+              <p className="text-xs text-gray-600">{data.schoolName} • {data.subject} • Class {data.classCode}</p> {/* Reduce text size */}
             </div>
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold flex items-center justify-center rounded-full text-lg">
+            <div className="flex items-center gap-3"> {/* Reduce gap */}
+              <div className="w-8 h-8 bg-purple-100 text-purple-700 font-semibold flex items-center justify-center rounded-full text-base"> {/* Smaller avatar */}
                 {data.teacherName?.split(" ").map((n: string) => n[0]).join("")}
               </div>
-              <LogoutButton />
+              <LogoutButton className="px-1.5 py-0.5 text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white rounded" /> {/* Smaller button */}
             </div>
           </div>
         </div>
@@ -211,14 +297,17 @@ export default function TeacherDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 cursor-pointer hover:shadow-lg transition" onClick={() => setShowFeedbackModal(true)}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Students</p>
-                <p className="text-2xl font-bold text-gray-900">{data.studentCount}</p>
+                <p className="text-sm font-medium text-gray-600">Today's Class Feedback</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {feedbackStats ? `⭐️ ${feedbackStats.average.toFixed(1)} / 5` : '—'}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">{data?.subject} • {feedbackStats ? `Based on feedback from ${feedbackStats.count} students.` : ''}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Users className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
+                <Star className="w-6 h-6 text-yellow-500" />
               </div>
             </div>
           </div>
@@ -250,7 +339,7 @@ export default function TeacherDashboard() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Completed</p>
+                <p className="text-sm font-medium text-gray-600">Students completed quizz</p>
                 <p className="text-2xl font-bold text-gray-900">{completedQuizzes.length}</p>
               </div>
               <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
@@ -273,7 +362,7 @@ export default function TeacherDashboard() {
               </div>
             </div>
             <Link href="/teacher/quiz/assign">
-              <Button className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+              <Button className="w-full bg-purple-600 hover:bg-purple-700">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Quiz
               </Button>
@@ -291,7 +380,7 @@ export default function TeacherDashboard() {
               </div>
             </div>
             <Link href="/teacher/analytics" className="w-full block">
-              <Button className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600">
+              <Button className="w-full bg-blue-600 hover:bg-blue-700">
                 <BarChart3 className="w-4 h-4 mr-2" />
                 View Analytics
               </Button>
@@ -454,21 +543,24 @@ export default function TeacherDashboard() {
 
                         {/* Actions */}
                         <div className="flex flex-col gap-2 lg:flex-shrink-0">
-                          <Link href={`/teacher/quiz/report/${quiz.id}`}>
-                            <button className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-lg font-medium flex items-center justify-center gap-2 hover:from-purple-600 hover:to-pink-600 transition-all duration-200 shadow-sm hover:shadow-md">
+                          {viewResultsLoading === quiz.id ? (
+                            <div className="w-full flex items-center justify-center py-4">
+                              <LoadingLottie message="Loading results..." />
+                            </div>
+                          ) : (
+                            <button
+                              className="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 shadow-sm hover:shadow-md"
+                              onClick={async () => {
+                                setViewResultsLoading(quiz.id);
+                                router.push(`/teacher/quiz/report/${quiz.id}`);
+                              }}
+                            >
                               <Eye className="w-4 h-4" />
                               View Results
                             </button>
-                          </Link>
+                          )}
                           <div className="flex gap-2">
-                            <button className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-1">
-                              <Edit className="w-3 h-3" />
-                              Edit
-                            </button>
-                            <button className="flex-1 bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors flex items-center justify-center gap-1">
-                              <Trash2 className="w-3 h-3" />
-                              Delete
-                            </button>
+
                           </div>
                         </div>
                       </div>
@@ -486,7 +578,7 @@ export default function TeacherDashboard() {
                   {filterDate ? 'No quizzes were assigned on the selected date.' : 'You haven\'t created any quizzes yet.'}
                 </p>
                 <Link href="/teacher/quiz/assign">
-                  <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+                  <Button className="bg-purple-600 hover:bg-purple-700">
                     <Plus className="w-4 h-4 mr-2" />
                     Create Your First Quiz
                   </Button>
@@ -496,6 +588,46 @@ export default function TeacherDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Feedback History Modal */}
+      <Modal
+        isOpen={showFeedbackModal}
+        onRequestClose={() => setShowFeedbackModal(false)}
+        ariaHideApp={false}
+        className="fixed inset-0 flex items-center justify-center z-50"
+        overlayClassName="fixed inset-0 bg-black bg-opacity-40 z-40"
+      >
+        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 flex flex-col items-center">
+          <h2 className="text-2xl font-bold mb-4">Class Feedback Over Time</h2>
+          <>
+            {feedbackLoading ? (
+              <LoadingLottie message="Loading feedback history..." />
+            ) : feedbackHistory.length === 0 ? (
+              <div className="text-gray-400 text-lg text-center py-16">No feedback data available yet.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={feedbackHistory} margin={{ top: 30, right: 40, left: 0, bottom: 30 }}>
+                  <defs>
+                    <linearGradient id="colorRating" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#fbbf24" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#fbbf24" stopOpacity={0.1} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                  <XAxis dataKey="date" tick={{ fontSize: 13, fontWeight: 600, fill: '#6366f1' }} angle={-20} dy={10} />
+                  <YAxis domain={[1, 5]} tickCount={5} tick={{ fontSize: 13, fontWeight: 600, fill: '#6366f1' }} />
+                  <Tooltip contentStyle={{ background: '#fff8e1', border: '1px solid #fbbf24', borderRadius: 12, fontWeight: 600, color: '#92400e' }}
+                    labelStyle={{ color: '#92400e', fontWeight: 700 }}
+                    formatter={(value: number) => `${value.toFixed(2)} ⭐️`} />
+                  <Area type="monotone" dataKey="average" stroke="none" fill="url(#colorRating)" fillOpacity={0.3} />
+                  <Line type="monotone" dataKey="average" stroke="#fbbf24" strokeWidth={4} dot={{ r: 7, fill: '#fbbf24', stroke: '#fff', strokeWidth: 3 }} activeDot={{ r: 10, fill: '#f59e42', stroke: '#fff', strokeWidth: 4 }} name="Average Rating" />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </>
+          <button onClick={() => setShowFeedbackModal(false)} className="mt-6 px-6 py-2 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700">Close</button>
+        </div>
+      </Modal>
     </div>
   );
 }

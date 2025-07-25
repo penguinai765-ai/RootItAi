@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Player from "lottie-react";
 import lottieAnimation from "../components/assets/education new color scheme.json";
+import LoadingLottie from "@/components/LoadingLottie";
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -49,47 +50,50 @@ export default function Home() {
   };
 
   if (loading || (user && userType)) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return <div className="flex items-center justify-center min-h-screen"><LoadingLottie message="Loading..." /></div>;
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-700 via-pink-500 to-blue-500 relative overflow-hidden">
-      {/* Glassmorphism Card */}
-      <div className="w-full max-w-md mx-auto rounded-3xl shadow-2xl bg-white/20 backdrop-blur-lg border border-white/30 p-6 md:p-10 flex flex-col items-center relative z-10">
-        {/* Brand Title */}
-        <h1 className="text-4xl md:text-5xl font-extrabold text-white drop-shadow-lg tracking-tight mb-2 animate-fade-in-up" style={{ letterSpacing: '0.04em' }}>RootIt</h1>
-        {/* Lottie Animation */}
-        <div className="w-56 h-56 md:w-64 md:h-64 mx-auto mb-2 animate-fade-in">
-          <Player
-            autoplay
-            loop
-            animationData={lottieAnimation}
-            style={{ width: '100%', height: '100%' }}
-            rendererSettings={{ preserveAspectRatio: 'xMidYMid slice' }}
-          />
-        </div>
-        {/* Headline & Subheadline */}
-        <div className="text-center mb-6">
-          <h2 className="text-2xl md:text-3xl font-bold text-white mb-2 animate-fade-in-up">AI-Powered Adaptive Learning</h2>
-          <p className="text-base md:text-lg text-white/80 animate-fade-in-up delay-100">Empower your journey with personalized, interactive, and engaging education.</p>
-        </div>
-        {/* Login Buttons */}
-        <div className="w-full flex flex-col gap-3 animate-fade-in-up delay-200">
-          <Button onClick={() => handleSignIn("teacher")}
-            className="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold py-3 rounded-xl shadow-lg hover:scale-105 transition-transform">
-            Login as Teacher
-          </Button>
-          <Button onClick={() => handleSignIn("student")}
-            className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold py-3 rounded-xl shadow-lg hover:scale-105 transition-transform">
-            Login as Student
-          </Button>
+    <div className="min-h-screen flex flex-col bg-[#F3F4F6] px-4 pt-6 pb-28 md:pb-0 relative">
+      {/* App Name Top Left */}
+      <div className="w-full flex items-center justify-start mb-4">
+        <span className="text-2xl font-extrabold" style={{ color: '#6366F1', fontFamily: 'Poppins, sans-serif', letterSpacing: '0.04em' }}>RootIt</span>
+      </div>
+      {/* Responsive Content Center */}
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <div className="w-full flex flex-col items-center justify-center">
+          <div className="w-full h-[45vh] md:h-[60vh] max-w-full mx-auto mb-2" style={{ background: 'transparent' }}>
+            <Player
+              autoplay
+              loop
+              animationData={lottieAnimation}
+              style={{ width: '100%', height: '100%', background: 'transparent' }}
+              rendererSettings={{ preserveAspectRatio: 'xMidYMid slice' }}
+            />
+          </div>
+          {/* Headline & Subheadline */}
+          <div className="w-full text-center mb-6">
+            <h2 className="text-2xl md:text-3xl font-bold mb-2" style={{ color: '#1F2937' }}>AI-Powered Adaptive Learning</h2>
+            <p className="text-base md:text-lg" style={{ color: '#4B5563' }}>Empower your journey with personalized, interactive, and engaging education.</p>
+          </div>
         </div>
       </div>
-      {/* Animated background shapes (optional for vibrancy) */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-pink-400 opacity-30 rounded-full blur-3xl animate-pulse-slow"></div>
-        <div className="absolute -bottom-24 right-0 w-80 h-80 bg-blue-400 opacity-20 rounded-full blur-2xl animate-pulse-slower"></div>
-        <div className="absolute top-1/2 left-1/2 w-72 h-72 bg-purple-500 opacity-20 rounded-full blur-2xl animate-pulse-slow" style={{ transform: 'translate(-50%, -50%)' }}></div>
+      {/* Responsive Button Bar */}
+      <div className="fixed md:static left-0 right-0 bottom-0 w-full px-4 pb-4 md:pb-0 bg-gradient-to-t from-white/90 to-transparent md:bg-transparent flex flex-col md:flex-row md:justify-center md:items-center gap-3 z-50 mb-8">
+        <Button
+          onClick={() => handleSignIn('student')}
+          className="w-full md:w-auto md:min-w-[220px] py-4 rounded-full font-bold text-white text-lg"
+          style={{ background: '#009688' }}
+        >
+          Join as Student
+        </Button>
+        <Button
+          onClick={() => handleSignIn('teacher')}
+          className="w-full md:w-auto md:min-w-[220px] py-4 rounded-full font-bold text-white text-lg"
+          style={{ background: '#6366F1' }}
+        >
+          Join as Teacher
+        </Button>
       </div>
     </div>
   );

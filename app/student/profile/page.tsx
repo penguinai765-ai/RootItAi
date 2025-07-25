@@ -14,6 +14,8 @@ import {
   BarChart3,
   BookOpen,
 } from "lucide-react";
+import LoadingLottie from "@/components/LoadingLottie";
+import Link from "next/link";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -35,8 +37,7 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading profile...</p>
+          <LoadingLottie message="Loading profile..." />
         </div>
       </div>
     );
@@ -139,24 +140,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button className="flex items-center gap-3 p-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl hover:shadow-lg transition-all">
-              <BookOpen className="w-5 h-5" />
-              <span className="font-semibold">View Analytics</span>
-            </button>
-            <button className="flex items-center gap-3 p-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:shadow-lg transition-all">
-              <BarChart3 className="w-5 h-5" />
-              <span className="font-semibold">Dashboard</span>
-            </button>
-            <button className="flex items-center gap-3 p-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all">
-              <GraduationCap className="w-5 h-5" />
-              <span className="font-semibold">Take Quiz</span>
-            </button>
-          </div>
-        </div>
+
 
         {/* Logout Section */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6">
@@ -168,20 +152,20 @@ export default function ProfilePage() {
       </div>
 
       {/* Mobile Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden">
-        <div className="flex justify-around py-2">
-          <button className="flex flex-col items-center py-2 px-4 text-gray-400">
-            <Home className="w-5 h-5" />
-            <span className="text-xs mt-1">Home</span>
-          </button>
-          <button className="flex flex-col items-center py-2 px-4 text-gray-400">
-            <BarChart3 className="w-5 h-5" />
-            <span className="text-xs mt-1">Analytics</span>
-          </button>
-          <button className="flex flex-col items-center py-2 px-4 text-purple-600">
-            <User className="w-5 h-5" />
-            <span className="text-xs mt-1">Profile</span>
-          </button>
+      <div className="fixed bottom-3 left-0 right-0 flex justify-center z-50 md:hidden">
+        <div className="flex justify-around w-[95vw] max-w-md mx-auto bg-white/80 backdrop-blur-lg border border-gray-200 rounded-2xl shadow-2xl px-4 py-2">
+          <Link href="/student/dashboard" className="flex flex-col items-center px-3 py-2 group">
+            <Home className="w-7 h-7 mb-1 group-hover:text-purple-600 text-gray-400 transition-colors" />
+            <span className="text-xs font-semibold group-hover:text-purple-600 text-gray-500">Home</span>
+          </Link>
+          <Link href="/student/analytics" className="flex flex-col items-center px-3 py-2 group">
+            <BarChart3 className="w-7 h-7 mb-1 group-hover:text-purple-600 text-purple-600 transition-colors" />
+            <span className="text-xs font-semibold group-hover:text-purple-600 text-purple-600">Analytics</span>
+          </Link>
+          <Link href="/student/profile" className="flex flex-col items-center px-3 py-2 group">
+            <User className="w-7 h-7 mb-1 group-hover:text-purple-600 text-gray-400 transition-colors" />
+            <span className="text-xs font-semibold group-hover:text-purple-600 text-gray-500">Profile</span>
+          </Link>
         </div>
       </div>
     </div>

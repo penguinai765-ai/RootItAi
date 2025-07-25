@@ -27,7 +27,7 @@ export default function TeacherSetup() {
     try {
       await verifyAndClaimTeacherProfile(user.uid, schoolCode, teacherCode);
       // On success, redirect to the dashboard where the new data will be loaded.
-      router.push("/teacher/dashboard"); 
+      router.push("/teacher/dashboard");
     } catch (err: any) {
       setError(err.message || "Failed to claim profile. Please check the details and try again.");
       console.error(err);
@@ -54,7 +54,7 @@ export default function TeacherSetup() {
               className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
               value={schoolCode}
               onChange={(e) => setSchoolCode(e.target.value)}
-              placeholder="e.g., vidy01"
+              placeholder="e.g., schoolcode123"
             />
           </div>
           <div>
@@ -69,7 +69,7 @@ export default function TeacherSetup() {
               className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
               value={teacherCode}
               onChange={(e) => setTeacherCode(e.target.value)}
-              placeholder="e.g., priya01"
+              placeholder="e.g., teachercode123"
             />
           </div>
           {error && <p className="text-sm text-center text-red-600">{error}</p>}

@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import Modal from "react-modal";
 import Link from "next/link";
+import LoadingLottie from "@/components/LoadingLottie";
 
 // Helper functions for styling
 const masteryColor = (level: string) =>
@@ -351,10 +352,7 @@ export default function TeacherAnalyticsPage() {
         return (
             <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                        <BarChart3 className="w-8 h-8 text-white" />
-                    </div>
-                    <p className="text-gray-600 font-medium">Loading analytics...</p>
+                    <LoadingLottie message="Loading analytics..." />
                 </div>
             </div>
         );
@@ -394,6 +392,17 @@ export default function TeacherAnalyticsPage() {
         );
     }
 
+    // Sort chapters by averageScore descending
+    const sortedChapters = [...analytics.chapterPerformance].sort((a, b) => b.averageScore - a.averageScore);
+    // Helper to get color for average score based on rank
+    const getScoreColor = (rank: number, total: number) => {
+        if (total <= 1) return 'text-green-600';
+        const percent = rank / (total - 1);
+        if (percent <= 0.33) return 'text-green-600';
+        if (percent <= 0.66) return 'text-yellow-500';
+        return 'text-red-500';
+    };
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-2 md:p-6">
             {/* Back to Dashboard Button */}
@@ -405,7 +414,7 @@ export default function TeacherAnalyticsPage() {
             </div>
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6">
-                <div className="rounded-2xl shadow-lg bg-white/80 backdrop-blur-sm p-4 flex flex-col gap-2 border-2 border-white">
+                <div className="rounded-2xl shadow-lg bg-white p-4 flex flex-col gap-2 border-2 border-white">
                     <div className="flex items-center gap-2 text-sm font-semibold text-gray-500">
                         <Target className="w-6 h-6 text-blue-500" />
                         Average Score
@@ -414,7 +423,7 @@ export default function TeacherAnalyticsPage() {
                     <div className="text-xs text-blue-400 font-bold">Class Average</div>
                 </div>
 
-                <div className="rounded-2xl shadow-lg bg-white/80 backdrop-blur-sm p-4 flex flex-col gap-2 border-2 border-white">
+                <div className="rounded-2xl shadow-lg bg-white p-4 flex flex-col gap-2 border-2 border-white">
                     <div className="flex items-center gap-2 text-sm font-semibold text-gray-500">
                         <BookOpen className="w-6 h-6 text-purple-500" />
                         Quizzes Taken
@@ -423,16 +432,16 @@ export default function TeacherAnalyticsPage() {
                     <div className="text-xs text-blue-400 font-bold">Assigned</div>
                 </div>
 
-                <div className="rounded-2xl shadow-lg bg-white/80 backdrop-blur-sm p-4 flex flex-col gap-2 border-2 border-white">
+                <div className="rounded-2xl shadow-lg bg-white p-4 flex flex-col gap-2 border-2 border-white">
                     <div className="flex items-center gap-2 text-sm font-semibold text-gray-500">
                         <TrendingUp className="w-6 h-6 text-green-500" />
                         Class Improvement
                     </div>
                     <div className="text-3xl md:text-4xl font-bold text-gray-800">{analytics.summary.classImprovement > 0 ? '+' : ''}{analytics.summary.classImprovement}%</div>
-                    <div className="text-xs text-blue-400 font-bold">vs Previous</div>
+                    <div className="text-xs text-blue-400 font-bold">vs Previous 5 quizzes</div>
                 </div>
 
-                <div className="rounded-2xl shadow-lg bg-white/80 backdrop-blur-sm p-4 flex flex-col gap-2 border-2 border-white">
+                <div className="rounded-2xl shadow-lg bg-white p-4 flex flex-col gap-2 border-2 border-white">
                     <div className="flex items-center gap-2 text-sm font-semibold text-gray-500">
                         <Users className="w-6 h-6 text-orange-400" />
                         Total Students
@@ -445,7 +454,7 @@ export default function TeacherAnalyticsPage() {
             {/* Main Analytics Grid */}
             <div className="grid grid-cols-1 md:grid-cols-6 gap-6 mb-6 auto-rows-min">
                 {/* Radar Chart (large, left) */}
-                <div className="md:col-span-2 md:row-span-2 bg-white/80 rounded-2xl shadow-lg p-6 flex flex-col border-2 border-white">
+                <div className="md:col-span-2 md:row-span-2 bg-white rounded-2xl shadow-lg p-6 flex flex-col border-2 border-white">
                     <div className="flex items-center gap-2 mb-2 font-bold text-purple-700 text-lg">
                         <Brain className="w-5 h-5" />
                         Cognitive Skills Distribution
@@ -467,7 +476,7 @@ export default function TeacherAnalyticsPage() {
                 </div>
 
                 {/* Common Mistakes (center, tall) */}
-                <div className="md:col-span-2 md:row-span-2 rounded-2xl shadow-lg bg-white/80 backdrop-blur-sm p-6 flex flex-col border-2 border-white">
+                <div className="md:col-span-2 md:row-span-2 rounded-2xl shadow-lg bg-white p-6 flex flex-col border-2 border-white">
                     <div className="flex items-center gap-2 mb-2 font-bold text-red-700 text-lg">
                         <Flame className="w-5 h-5" />
                         Common Class Mistakes
@@ -489,7 +498,7 @@ export default function TeacherAnalyticsPage() {
                 </div>
 
                 {/* Needs Attention (right, tall) */}
-                <div className="md:col-span-2 bg-red-50/80 rounded-2xl shadow-lg p-6 flex flex-col border-2 border-white mb-6 md:mb-0">
+                <div className="md:col-span-2 bg-red-50 rounded-2xl shadow-lg p-6 flex flex-col border-2 border-white mb-6 md:mb-0">
                     <div className="flex items-center gap-2 mb-2 font-bold text-red-600 text-lg">
                         <AlertTriangle className="w-5 h-5" />
                         Needs Attention
@@ -511,7 +520,7 @@ export default function TeacherAnalyticsPage() {
                 </div>
 
                 {/* Top Performers (right, short, below Needs Attention) */}
-                <div className="md:col-start-5 md:col-span-2 bg-green-50/80 rounded-2xl shadow-lg p-6 flex flex-col border-2 border-white md:row-start-2">
+                <div className="md:col-start-5 md:col-span-2 bg-green-50 rounded-2xl shadow-lg p-6 flex flex-col border-2 border-white md:row-start-2">
                     <div className="flex items-center gap-2 mb-2 font-bold text-green-700 text-lg">
                         <Trophy className="w-5 h-5" />
                         Top Performers
@@ -534,64 +543,77 @@ export default function TeacherAnalyticsPage() {
             </div>
 
             {/* Chapter-wise Performance Card */}
-            <div className="rounded-2xl shadow-lg bg-white/80 backdrop-blur-sm p-6 mb-6 border-2 border-white">
-                <div className="flex items-center gap-2 mb-1 font-bold text-purple-700 text-xl">
-                    <BookOpen className="w-6 h-6" />
-                    Chapter-wise Performance
-                </div>
-                <div className="text-sm text-gray-600 mb-4">Detailed breakdown by topic areas</div>
-                <div className="h-80 w-full mb-6"> {/* Increased height from h-64 to h-80 */}
-                    <ResponsiveContainer width="100%" height="100%">
-                        <ReBarChart data={Array.isArray(analytics.chapterPerformance) ? analytics.chapterPerformance : []} barCategoryGap="25%">
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                            <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 600 }} axisLine={false} tickLine={false} interval={0} angle={-20} textAnchor="end" height={90} />
-                            <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                            <Tooltip formatter={(value: any) => `${value}%`} />
-                            <Bar dataKey="averageScore" radius={[12, 12, 4, 4]} maxBarSize={60} fill="#8B5CF6" />
-                        </ReBarChart>
-                    </ResponsiveContainer>
-                </div>
-                {/* Beautiful summary rows below the chart */}
-                <div className="space-y-6 mt-4">
-                    {analytics.chapterPerformance.map((c: any, i: number) => (
-                        <div key={i} className="bg-white rounded-xl p-4 flex flex-col gap-2 border border-purple-50 shadow-sm">
-                            <div className="flex flex-wrap items-center gap-4 mb-2">
-                                <span className="font-bold text-lg text-gray-900 flex-shrink-0">{c.name}</span>
-                                <span className="text-purple-700 font-semibold ml-2">Average Score</span>
-                                <span className="text-2xl font-bold text-gray-900">{Math.round(c.averageScore)}%</span>
-                                <span className="ml-4 text-gray-700 font-semibold">Struggling Students</span>
-                                <span className="text-xl font-bold text-red-500">{c.struggling}%</span>
-                                <button
-                                    className="bg-red-100 p-1 rounded-full hover:bg-red-200 transition-colors"
-                                    onClick={() => openStrugglingModal(c.name)}
-                                    title="View struggling students"
-                                >
-                                    <Eye className="w-4 h-4 text-red-600" />
-                                </button>
-                            </div>
-                            <div className="flex items-center gap-4 w-full">
-                                <div className="flex-1">
-                                    <div className="text-xs text-purple-700 font-semibold mb-1">Average Score</div>
-                                    <div className="w-full h-2 bg-gray-200 rounded-full">
-                                        <div className="h-2 rounded-full bg-purple-400" style={{ width: `${c.averageScore}%` }}></div>
-                                    </div>
-                                </div>
-                                <div className="flex-1">
-                                    <div className="text-xs text-red-500 font-semibold mb-1">Struggling Students</div>
-                                    <div className="w-full h-2 bg-gray-200 rounded-full">
-                                        <div className="h-2 rounded-full bg-red-400" style={{ width: `${c.struggling}%` }}></div>
-                                    </div>
-                                </div>
-                            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {/* Chapter-wise Performance (left) */}
+                <div>
+                    <div className="rounded-2xl shadow-lg bg-white p-6 mb-6 border-2 border-white">
+                        <div className="flex items-center gap-2 mb-1 font-bold text-purple-700 text-xl">
+                            <BookOpen className="w-6 h-6" />
+                            Chapter-wise Performance
                         </div>
-                    ))}
+                        <div className="text-sm text-gray-600 mb-4">Detailed breakdown by topic areas</div>
+                        <div className="h-64 w-full max-w-[420px] mx-auto mb-6"> {/* Reduced width */}
+                            <ResponsiveContainer width="100%" height="100%">
+                                <ReBarChart data={Array.isArray(analytics.chapterPerformance) ? analytics.chapterPerformance : []} barCategoryGap="25%">
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                    <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 600 }} axisLine={false} tickLine={false} interval={0} angle={-20} textAnchor="end" height={90} />
+                                    <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} domain={[0, 100]} />
+                                    <Tooltip formatter={(value: any) => `${value}%`} />
+                                    <Bar dataKey="averageScore" radius={[12, 12, 4, 4]} maxBarSize={60} fill="#8B5CF6" />
+                                </ReBarChart>
+                            </ResponsiveContainer>
+                        </div>
+                        {/* Beautiful summary rows below the chart */}
+                        <div className="space-y-6 mt-4">
+                            {sortedChapters.map((c: any, i: number) => {
+                                // Compute max and min score for the chapter if not present
+                                const maxScore = c.maxScore !== undefined ? c.maxScore : (Array.isArray(c.scores) ? Math.max(...c.scores) : null);
+                                const minScore = c.minScore !== undefined ? c.minScore : (Array.isArray(c.scores) ? Math.min(...c.scores) : null);
+                                return (
+                                    <div key={i} className="bg-white rounded-xl p-4 flex flex-col gap-2 border border-purple-50 shadow-sm">
+                                        <div className="flex flex-wrap items-center gap-4 mb-2">
+                                            <span className="font-bold text-lg text-gray-900 flex-shrink-0">{c.name}</span>
+                                            <span className="text-purple-700 font-semibold ml-2">Average Score</span>
+                                            <span className={`text-2xl font-bold ${getScoreColor(i, sortedChapters.length)}`}>{Math.round(c.averageScore)}%</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-gray-900 font-semibold">Struggling Students</span>
+                                            <span className="text-xl font-bold text-red-500">{c.struggling}%</span>
+                                            <button
+                                                className="bg-red-100 p-1 rounded-full hover:bg-red-200 transition-colors"
+                                                onClick={() => openStrugglingModal(c.name)}
+                                                title="View struggling students"
+                                            >
+                                                <Eye className="w-4 h-4 text-red-600" />
+                                            </button>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-6 mb-2">
+                                            <span className="text-xs text-gray-500 font-semibold">Max Score: <span className="text-green-600 font-bold">{c.maxScore !== null && c.maxScore !== undefined ? Math.round(c.maxScore) + '%' : 'N/A'}</span></span>
+                                            <span className="text-xs text-gray-500 font-semibold">Min Score: <span className="text-red-600 font-bold">{c.minScore !== null && c.minScore !== undefined ? Math.round(c.minScore) + '%' : 'N/A'}</span></span>
+                                        </div>
+                                        <div className="flex items-center gap-4 w-full">
+                                            <div className="flex-1">
+                                                <div className="text-xs text-purple-700 font-semibold mb-1">Average Score</div>
+                                                <div className="w-full h-2 bg-gray-200 rounded-full">
+                                                    <div className="h-2 rounded-full bg-purple-400" style={{ width: `${c.averageScore}%` }}></div>
+                                                </div>
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="text-xs text-red-500 font-semibold mb-1">Struggling Students</div>
+                                                <div className="w-full h-2 bg-gray-200 rounded-full">
+                                                    <div className="h-2 rounded-full bg-red-400" style={{ width: `${c.struggling}%` }}></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
-            </div>
-
-            {/* Student Leaderboard (wide, below radar/mastery, spans left+center) */}
-            <div className="md:grid md:grid-cols-4 md:gap-6">
-                <div className="md:col-span-3">
-                    <div className="rounded-2xl shadow-lg bg-white/80 backdrop-blur-sm p-6 mb-6 border-2 border-white">
+                {/* Student Leaderboard (right) */}
+                <div>
+                    <div className="rounded-2xl shadow-lg bg-white p-6 mb-6 border-2 border-white">
                         <div className="flex items-center gap-2 mb-4 font-bold text-purple-700 text-xl">
                             <BarChart3 className="w-6 h-6" />
                             Student Leaderboard
@@ -620,7 +642,7 @@ export default function TeacherAnalyticsPage() {
                                         <th className="py-2 px-3 text-left">Division</th>
                                         <th className="py-2 px-3 text-left">Best Performing Chapter</th>
                                         <th className="py-2 px-3 text-left">Least performing Chapter</th>
-                                        <th className="py-2 px-3 text-left">Score (%)</th>
+                                        <th className="py-2 px-3 text-left">Average subject Score  (%)</th>
                                         <th className="py-2 px-3 text-left">Improvement</th>
                                     </tr>
                                 </thead>
@@ -645,29 +667,6 @@ export default function TeacherAnalyticsPage() {
                                     ))}
                                 </tbody>
                             </table>
-                        </div>
-                    </div>
-                </div>
-                {/* Top Performers on mobile (below leaderboard) */}
-                <div className="md:hidden">
-                    <div className="rounded-2xl shadow-lg bg-green-50/80 backdrop-blur-sm p-6 mb-6 border-2 border-white">
-                        <div className="flex items-center gap-2 mb-2 font-bold text-green-700 text-lg">
-                            <Trophy className="w-5 h-5" />
-                            Top Performers
-                        </div>
-                        <div className="text-sm text-gray-600 mb-2">Students excelling in class</div>
-                        <div className="space-y-2">
-                            {analytics.topPerformers.map((s: any, i: number) => (
-                                <div key={i} className="flex items-center justify-between bg-white rounded-xl p-2 shadow border border-green-100">
-                                    <div>
-                                        <div className="font-bold text-gray-800">{s.name}</div>
-                                        <div className="text-xs text-gray-500">Score: {s.overallScore}%</div>
-                                    </div>
-                                    <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">
-                                        {s.overallScore >= 90 ? "High" : "Moderate"}
-                                    </span>
-                                </div>
-                            ))}
                         </div>
                     </div>
                 </div>
@@ -792,10 +791,9 @@ export default function TeacherAnalyticsPage() {
                     <div className="space-y-2 max-h-64 overflow-y-auto">
                         {strugglingStudents.length > 0 ? (
                             strugglingStudents.map((student: any) => (
-                                <button
+                                <div
                                     key={student.id}
-                                    onClick={() => openStudentAnalytics(student)}
-                                    className="w-full flex items-center justify-between p-3 bg-red-50 rounded-xl border border-red-200 hover:bg-red-100 transition-colors text-left"
+                                    className="w-full flex items-center justify-between p-3 bg-red-50 rounded-xl border border-red-200 text-left"
                                 >
                                     <div>
                                         <div className="font-semibold text-gray-800">{student.name}</div>
@@ -805,7 +803,7 @@ export default function TeacherAnalyticsPage() {
                                         <div className="text-lg font-bold text-red-600">{Math.round(student.overallScore)}%</div>
                                         <div className="text-xs text-gray-500">Score</div>
                                     </div>
-                                </button>
+                                </div>
                             ))
                         ) : (
                             <div className="text-center py-8 text-gray-500">

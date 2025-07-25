@@ -5,32 +5,44 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
-    "start": "next start",
+    "export": "next export",
+    "start": "node .next/standalone/server.js",
     "lint": "next lint"
   },
+  "engines": {
+    "node": "18"
+  },
+  "main": "lib/index.js",
   "dependencies": {
     "@types/react-modal": "^3.16.3",
     "@types/recharts": "^1.8.29",
     "chart.js": "^4.5.0",
-    "firebase": "^11.10.0",
+    "firebase": "^12.0.0",
+    "firebase-admin": "^12.7.0",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.525.0",
-    "next": "15.3.5",
-    "react": "^19.0.0",
+    "next": "^15.4.3",
+    "react": "^19.1.0",
     "react-chartjs-2": "^5.3.0",
-    "react-dom": "^19.0.0",
+    "react-dom": "^19.1.0",
     "react-modal": "^3.16.3",
+    "react-swipeable": "^7.0.2",
     "recharts": "^3.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/express": "^5.0.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cpx": "^1.5.0",
     "eslint": "^9",
     "eslint-config-next": "15.3.5",
+    "firebase-functions": "^6.4.0",
+    "firebase-functions-test": "^3.1.0",
+    "firebase-tools": "^14.11.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5.7.3"
   }
 }

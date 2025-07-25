@@ -39,7 +39,9 @@ import {
   Flame,
   BookMarked,
   Dumbbell,
+  Info,
 } from "lucide-react";
+import LoadingLottie from "@/components/LoadingLottie";
 
 export default function StudentAnalyticsPage() {
   const { user } = useAuth();
@@ -47,6 +49,14 @@ export default function StudentAnalyticsPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'insights' | 'progress'>('overview');
+
+  // Move all useState and useEffect hooks to the top of the StudentAnalyticsPage function, before any if/return statements.
+  // Place:
+  // const [infoModal, setInfoModal] = useState<{ open: boolean, text: string }>({ open: false, text: "" });
+  // immediately after the other useState hooks, and before any if (isLoading) or if (!analytics) returns.
+  const [infoModal, setInfoModal] = useState<{ open: boolean, text: string }>({ open: false, text: "" });
+  // Add state for modal
+  const [showQuizInfo, setShowQuizInfo] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -69,7 +79,7 @@ export default function StudentAnalyticsPage() {
   }, [user]);
 
   if (isLoading)
-    return <div className="p-8 text-center">Loading...</div>;
+    return <div className="p-8 text-center"><LoadingLottie message="Loading your analytics..." /></div>;
   if (!analytics)
     return <div className="p-8 text-center">Could not load your analytics data. Please try again later.</div>;
 
@@ -116,11 +126,7 @@ export default function StudentAnalyticsPage() {
           </div>
           <h2 className="text-2xl font-bold text-gray-800 mb-4">No Analytics Data Yet</h2>
           <p className="text-gray-600 mb-6">Complete your first quiz to start seeing detailed analytics and insights!</p>
-          <div className="text-xs text-gray-500 mb-4">
-            Debug: domainPerformance={analytics.domainPerformance?.length || 0},
-            subjectPerformance={analytics.subjectPerformance?.length || 0},
-            detailedAnalysisHistory={analytics.detailedAnalysisHistory?.length || 0}
-          </div>
+
           <Link href="/student/dashboard" className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg transition-all">
             Go to Dashboard
           </Link>
@@ -135,6 +141,10 @@ export default function StudentAnalyticsPage() {
   const hasDetailedAnalysis = analytics.detailedAnalysisHistory && analytics.detailedAnalysisHistory.length > 0;
   const latestQuizEntry = hasDetailedAnalysis ? analytics.detailedAnalysisHistory[analytics.detailedAnalysisHistory.length - 1] : null;
   const latestQuiz = latestQuizEntry?.analysis || {};
+  // Add these if not already present:
+  const latestQuizSubject = latestQuizEntry?.subjectName || latestQuizEntry?.subjectCode || "-";
+  const latestQuizChapter = latestQuizEntry?.chapterName || latestQuizEntry?.chapterId || "-";
+  const latestQuizSubtopic = latestQuizEntry?.subtopicName || latestQuizEntry?.subtopicId || "-";
 
   // Fallback data if no detailed analysis exists
   const fallbackData = {
@@ -195,6 +205,9 @@ export default function StudentAnalyticsPage() {
           ? "bg-green-500"
           : "bg-blue-500",
   }));
+
+  // Map subject code to name
+  const codeToName = Object.fromEntries(subjects.map((s: any) => [s.code, s.name]));
   // Cognitive Skill Data - using analysis object
   const cognitiveSkillData = [
     {
@@ -238,7 +251,48 @@ export default function StudentAnalyticsPage() {
     "#f59e42", // orange
   ];
 
+  // Helper to map code or name to subject name
+  function getSubjectName(key: string) {
+    const subject = analytics.subjectPerformance.find(
+      (s: any) => s.code === key || s.name === key
+    );
+    return subject ? subject.name : key;
+  }
+
+  // XP values as integers
+  const weeklyXP = Math.round(analytics.xp || 0);
+  const weeklyXPTarget = Math.round(analytics.xpToNextLevel || 1000);
+  const xpToGo = Math.max(weeklyXPTarget - weeklyXP, 0);
+  const progressPercent = Math.round((weeklyXP / weeklyXPTarget) * 100);
+
+  // Remove any duplicate declarations of latestQuiz and related variables. Only keep this set above the return statement:
+
   // --- UI ---
+  const performanceInfo = "This score reflects how well you performed in your previous quiz.";
+  const improvementInfo = "This indicates how much you've improved compared to your last attempt.";
+  const timeEfficiencyInfo = "This measures how quickly and accurately you answered the questions.";
+  const confidenceInfo = "This shows how confident you were while answering the quiz.";
+
+  const InfoModal = ({ open, text, onClose }: { open: boolean, text: string, onClose: () => void }) => (
+    open ? (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="bg-white rounded-2xl shadow-xl p-6 max-w-xs w-full text-center relative animate-fade-in">
+          <button onClick={onClose} className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-xl font-bold">&times;</button>
+          <div className="text-gray-800 text-base font-medium mb-2">Info</div>
+          <div className="text-gray-600 text-sm">{text}</div>
+        </div>
+      </div>
+    ) : null
+  );
+
+  // Find the highest and lowest performance in domainPerformance
+  const maxDomain = domainPerformance.length > 0
+    ? Math.max(...domainPerformance.map((d: { percentage: number }) => d.percentage))
+    : null;
+  const minDomain = domainPerformance.length > 0
+    ? Math.min(...domainPerformance.map((d: { percentage: number }) => d.percentage))
+    : null;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
       {/* Header */}
@@ -262,9 +316,12 @@ export default function StudentAnalyticsPage() {
           <div className="pb-4 pt-3 px-3">
             <div className="flex items-center gap-2 text-lg font-bold mb-2">
               <BarChart3 className="w-5 h-5 text-purple-600" /> Latest Quiz Performance
+              <button onClick={() => setShowQuizInfo(true)} className="ml-1 p-1 rounded-full hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all" aria-label="Quiz Info">
+                <Info className="w-5 h-5 text-purple-500" />
+              </button>
             </div>
             <div className="grid grid-cols-2 gap-3 md:gap-4">
-              <div className="bg-gradient-to-br from-blue-100 via-blue-50 to-cyan-50 p-4 rounded-2xl border-2 border-blue-200 shadow-lg">
+              <div className="bg-gradient-to-br from-blue-100 via-blue-50 to-cyan-50 p-4 rounded-2xl border-2 border-blue-200 shadow-lg" onClick={() => setInfoModal({ open: true, text: performanceInfo })}>
                 <div className="flex items-center gap-2 mb-3">
                   <Target className="w-5 h-5 text-blue-600" />
                   <span className="text-sm text-blue-700 font-semibold">Performance</span>
@@ -273,7 +330,7 @@ export default function StudentAnalyticsPage() {
                   {displayData.performanceScore ?? "--"}%
                 </div>
               </div>
-              <div className="bg-gradient-to-br from-green-100 via-green-50 to-emerald-50 p-4 rounded-2xl border-2 border-green-200 shadow-lg">
+              <div className="bg-gradient-to-br from-green-100 via-green-50 to-emerald-50 p-4 rounded-2xl border-2 border-green-200 shadow-lg" onClick={() => setInfoModal({ open: true, text: timeEfficiencyInfo })}>
                 <div className="flex items-center gap-2 mb-3">
                   <Clock className="w-5 h-5 text-green-600" />
                   <span className="text-sm text-green-700 font-semibold">Time Efficiency</span>
@@ -282,16 +339,16 @@ export default function StudentAnalyticsPage() {
                   {displayData.timeEfficiency || "--"}
                 </div>
               </div>
-              <div className="bg-gradient-to-br from-purple-100 via-purple-50 to-violet-50 p-4 rounded-2xl border-2 border-purple-200 shadow-lg">
+              <div className="bg-gradient-to-br from-purple-100 via-purple-50 to-violet-50 p-4 rounded-2xl border-2 border-purple-200 shadow-lg" onClick={() => setInfoModal({ open: true, text: improvementInfo })}>
                 <div className="flex items-center gap-2 mb-3">
-                  <Brain className="w-5 h-5 text-purple-600" />
-                  <span className="text-sm text-purple-700 font-semibold">Concept Mastery</span>
+                  <TrendingUp className="w-5 h-5 text-purple-600" />
+                  <span className="text-sm text-purple-700 font-semibold">Improvement</span>
                 </div>
-                <div className="text-lg font-bold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
-                  {displayData.conceptualUnderstanding || "--"}
+                <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
+                  {(analytics.summary?.improvementRate ?? 0) > 0 ? '+' : ''}{analytics.summary?.improvementRate ?? 0}%
                 </div>
               </div>
-              <div className="bg-gradient-to-br from-orange-100 via-orange-50 to-yellow-50 p-4 rounded-2xl border-2 border-orange-200 shadow-lg">
+              <div className="bg-gradient-to-br from-orange-100 via-orange-50 to-yellow-50 p-4 rounded-2xl border-2 border-orange-200 shadow-lg" onClick={() => setInfoModal({ open: true, text: confidenceInfo })}>
                 <div className="flex items-center gap-2 mb-3">
                   <TrendingUp className="w-5 h-5 text-orange-600" />
                   <span className="text-sm text-orange-700 font-semibold">Confidence</span>
@@ -341,7 +398,13 @@ export default function StudentAnalyticsPage() {
                       <Tooltip formatter={(value: any, name: any, props: any) => [`${value}%`, props.payload.level]} />
                       <Bar dataKey="percentage" radius={[12, 12, 4, 4]} maxBarSize={60}>
                         {domainPerformance.map((entry: any, index: number) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
+                          <Cell key={`cell-${index}`}
+                            fill={
+                              entry.percentage === maxDomain ? '#22c55e' : // green-500
+                                entry.percentage === minDomain ? '#ef4444' : // red-500
+                                  '#6366f1' // default: purple-500
+                            }
+                          />
                         ))}
                       </Bar>
                     </ReBarChart>
@@ -374,7 +437,7 @@ export default function StudentAnalyticsPage() {
             {activeTab === 'progress' && (
               <div className="shadow-lg border-0 bg-white/80 backdrop-blur-sm rounded-2xl mb-4">
                 <div className="flex items-center gap-2 px-3 pt-3 font-bold">
-                  <TrendingUp className="w-5 h-5 text-purple-600" /> Progress Over Time
+                  <TrendingUp className="w-5 h-5 text-purple-600" /> Subject wise progress Over Time
                 </div>
                 <div className="h-44 w-full px-2 pb-3">
                   <ResponsiveContainer width="100%" height="100%">
@@ -382,7 +445,10 @@ export default function StudentAnalyticsPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                       <XAxis dataKey="date" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-                      <Tooltip />
+                      {/* Remove subject code from tooltip */}
+                      <Tooltip
+                        formatter={(_, name) => [_, codeToName[String(name)] || name]}
+                      />
                       {uniqueSubjects.map((subjectCode: string, idx: number) => (
                         <Area
                           key={subjectCode}
@@ -396,6 +462,15 @@ export default function StudentAnalyticsPage() {
                       ))}
                     </AreaChart>
                   </ResponsiveContainer>
+                </div>
+                {/* Color legend below the graph */}
+                <div className="flex flex-wrap gap-4 justify-center mt-2">
+                  {uniqueSubjects.map((subjectCode, idx) => (
+                    <div key={subjectCode} className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: subjectColors[idx % subjectColors.length], display: 'inline-block' }}></span>
+                      <span className="text-sm text-gray-700 font-medium">{codeToName[subjectCode] || subjectCode}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -418,7 +493,7 @@ export default function StudentAnalyticsPage() {
                       </div>
                       <div>
                         <h3 className="font-bold text-gray-800 text-base">{subject.name}</h3>
-                        <p className="text-xs text-gray-600 font-medium uppercase tracking-wide">{subject.code}</p>
+
                       </div>
                     </div>
                     <div className="flex justify-between items-center">
@@ -456,23 +531,37 @@ export default function StudentAnalyticsPage() {
           </div>
         </div>
         {/* Mobile Navigation */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden">
-          <div className="flex justify-around py-2">
-            <button className="flex flex-col items-center py-2 px-4 text-gray-400">
-              <Home className="w-5 h-5" />
-              <span className="text-xs mt-1">Home</span>
-            </button>
-            <button className="flex flex-col items-center py-2 px-4 text-purple-600">
-              <BarChart3 className="w-5 h-5" />
-              <span className="text-xs mt-1">Analytics</span>
-            </button>
-            <button className="flex flex-col items-center py-2 px-4 text-gray-400">
-              <User className="w-5 h-5" />
-              <span className="text-xs mt-1">Profile</span>
-            </button>
+        <div className="fixed bottom-3 left-0 right-0 flex justify-center z-50 md:hidden">
+          <div className="flex justify-around w-[95vw] max-w-md mx-auto bg-white/80 backdrop-blur-lg border border-gray-200 rounded-2xl shadow-2xl px-4 py-2">
+            <Link href="/student/dashboard" className="flex flex-col items-center px-3 py-2 group">
+              <Home className="w-7 h-7 mb-1 group-hover:text-purple-600 text-gray-400 transition-colors" />
+              <span className="text-xs font-semibold group-hover:text-purple-600 text-gray-500">Home</span>
+            </Link>
+            <Link href="/student/analytics" className="flex flex-col items-center px-3 py-2 group">
+              <BarChart3 className="w-7 h-7 mb-1 group-hover:text-purple-600 text-purple-600 transition-colors" />
+              <span className="text-xs font-semibold group-hover:text-purple-600 text-purple-600">Analytics</span>
+            </Link>
+            <Link href="/student/profile" className="flex flex-col items-center px-3 py-2 group">
+              <User className="w-7 h-7 mb-1 group-hover:text-purple-600 text-gray-400 transition-colors" />
+              <span className="text-xs font-semibold group-hover:text-purple-600 text-gray-500">Profile</span>
+            </Link>
           </div>
         </div>
       </div>
+      <InfoModal open={infoModal.open} text={infoModal.text} onClose={() => setInfoModal({ open: false, text: "" })} />
+      {showQuizInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-xs w-full text-center relative animate-fade-in">
+            <button onClick={() => setShowQuizInfo(false)} className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-xl font-bold">&times;</button>
+            <div className="text-gray-800 text-lg font-bold mb-2">Latest Quiz Details</div>
+            <div className="text-left space-y-2">
+              <div><span className="font-semibold">Subject:</span> {latestQuizEntry?.subjectName || latestQuizEntry?.subjectCode || "-"}</div>
+              <div><span className="font-semibold">Chapter:</span> {latestQuizEntry?.chapterName || latestQuizEntry?.chapterId || "-"}</div>
+              <div><span className="font-semibold">Subtopic:</span> {latestQuizEntry?.subtopicName || latestQuizEntry?.subtopicId || "-"}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

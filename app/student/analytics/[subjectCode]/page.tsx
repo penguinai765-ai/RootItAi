@@ -47,6 +47,7 @@ import {
     BarChart4,
     ListChecks,
 } from "lucide-react";
+import LoadingLottie from "@/components/LoadingLottie";
 
 export default function SubjectAnalyticsPage() {
     const { user } = useAuth();
@@ -77,10 +78,7 @@ export default function SubjectAnalyticsPage() {
         return (
             <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                        <BarChart3 className="w-8 h-8 text-white" />
-                    </div>
-                    <p className="text-gray-600 font-medium">Loading analytics...</p>
+                    <LoadingLottie message="Loading analytics..." />
                 </div>
             </div>
         );
@@ -139,7 +137,7 @@ export default function SubjectAnalyticsPage() {
 
     // Emoji mapping for chapters
     const chapterEmojis = [
-        "📚", "🔬", "⚗️", "🧮", "🌱", "⚡", "🔥", "💡", "🔋", "🌍", "��", "📊"
+        "📚", "🔬", "⚗️", "🧮", "🌱", "⚡", "🔥", "💡", "🔋", "🌍", "", "📊"
     ];
 
     const chapterIcons = [
@@ -149,21 +147,15 @@ export default function SubjectAnalyticsPage() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
             {/* Header */}
-            <div className="bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 text-white p-3 md:p-6">
-                <div className="max-w-7xl mx-auto">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <Link href="/student/analytics" className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-all">
-                                <ArrowLeft className="w-5 h-5" />
-                            </Link>
-                            <div>
-                                <h1 className="text-xl md:text-3xl font-bold">{analytics.subjectName || subjectCode}</h1>
-                                <p className="text-purple-100 mt-1 text-sm">Subject Analytics & Insights</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                            <div className="w-8 h-8 bg-white/20 rounded-full"></div>
-                            <div className="w-8 h-8 bg-white/20 rounded-full"></div>
+            <div className="sticky top-0 z-30 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 text-white p-4 md:p-6 shadow-md">
+                <div className="max-w-7xl mx-auto flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <Link href="/student/analytics" className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-all">
+                            <ArrowLeft className="w-6 h-6" />
+                        </Link>
+                        <div>
+                            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">{analytics.subjectName || subjectCode}</h1>
+                            <p className="text-purple-100 mt-1 text-sm font-medium">Subject Analytics & Insights</p>
                         </div>
                     </div>
                 </div>
@@ -171,44 +163,24 @@ export default function SubjectAnalyticsPage() {
 
             <div className="max-w-7xl mx-auto p-3 md:p-6 space-y-6 pb-20 md:pb-6">
                 {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-gradient-to-br from-blue-100 via-blue-50 to-cyan-50 p-4 rounded-2xl border-2 border-blue-200 shadow-lg">
-                        <div className="flex items-center gap-2 mb-3">
-                            <Target className="w-5 h-5 text-blue-600" />
-                            <span className="text-sm text-blue-700 font-semibold">Average Score</span>
+                <div className="flex flex-col gap-4 mb-6 md:flex-row md:gap-6 items-stretch">
+                    <div className="flex-1 bg-gradient-to-br from-blue-100 via-blue-50 to-cyan-50 p-6 rounded-2xl border-2 border-blue-200 shadow-lg flex flex-col items-center text-center">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Target className="w-7 h-7 text-blue-600" />
+                            <span className="text-base text-blue-700 font-semibold">Average Score</span>
                         </div>
-                        <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-                            {analytics.summary.averageScore}%
-                        </div>
+                        <div className="text-4xl font-extrabold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">{analytics.summary.averageScore}%</div>
                     </div>
-
-                    <div className="bg-gradient-to-br from-green-100 via-green-50 to-emerald-50 p-4 rounded-2xl border-2 border-green-200 shadow-lg">
-                        <div className="flex items-center gap-2 mb-3">
-                            <BookOpen className="w-5 h-5 text-green-600" />
-                            <span className="text-sm text-green-700 font-semibold">Quizzes Taken</span>
+                    <div className="flex-1 flex flex-row gap-4 md:flex-col md:gap-4">
+                        <div className="flex-1 bg-gradient-to-br from-green-100 via-green-50 to-emerald-50 p-6 rounded-2xl border-2 border-green-200 shadow-lg flex flex-col items-center text-center">
+                            <BookOpen className="w-7 h-7 text-green-600 mb-1" />
+                            <span className="text-base text-green-700 font-semibold">Quizzes</span>
+                            <div className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">{analytics.summary.quizzesAttempted}</div>
                         </div>
-                        <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                            {analytics.summary.quizzesAttempted}
-                        </div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-purple-100 via-purple-50 to-violet-50 p-4 rounded-2xl border-2 border-purple-200 shadow-lg">
-                        <div className="flex items-center gap-2 mb-3">
-                            <TrendingUp className="w-5 h-5 text-purple-600" />
-                            <span className="text-sm text-purple-700 font-semibold">Improvement</span>
-                        </div>
-                        <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">
-                            {analytics.summary.improvementRate > 0 ? '+' : ''}{analytics.summary.improvementRate}%
-                        </div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-orange-100 via-orange-50 to-yellow-50 p-4 rounded-2xl border-2 border-orange-200 shadow-lg">
-                        <div className="flex items-center gap-2 mb-3">
-                            <Clock className="w-5 h-5 text-orange-600" />
-                            <span className="text-sm text-orange-700 font-semibold">Time Efficiency</span>
-                        </div>
-                        <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-orange-600 to-yellow-600 bg-clip-text text-transparent">
-                            {analytics.summary.timeEfficiency}m
+                        <div className="flex-1 bg-gradient-to-br from-purple-100 via-purple-50 to-violet-50 p-6 rounded-2xl border-2 border-purple-200 shadow-lg flex flex-col items-center text-center">
+                            <TrendingUp className="w-7 h-7 text-purple-600 mb-1" />
+                            <span className="text-base text-purple-700 font-semibold">Improvement</span>
+                            <div className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-purple-600 to-violet-600 bg-clip-text text-transparent">{analytics.summary.improvementRate > 0 ? '+' : ''}{analytics.summary.improvementRate}%</div>
                         </div>
                     </div>
                 </div>
@@ -326,7 +298,7 @@ export default function SubjectAnalyticsPage() {
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <AlertCircle className="w-4 h-4 text-red-600" />
-                                                            <span className="text-red-700">Needs Work: <strong>{chapter.weakest}</strong></span>
+                                                            <span className="text-red-700">Needs Work: <strong>{chapter.needsWork && chapter.needsWork.length > 0 ? chapter.needsWork.join(', ') : 'No subtopics need work!'}</strong></span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -404,22 +376,47 @@ export default function SubjectAnalyticsPage() {
                     })}
                 </div>
 
+                {/* Cognitive Skill Analysis: no horizontal scroll, vibrant backgrounds, no overflow-x-auto */}
+                {analytics.cognitiveSkillSummary && (
+                    <div className="shadow-lg border-0 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 mb-6">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Brain className="w-6 h-6 text-indigo-600 animate-bounce" />
+                            <h2 className="text-xl font-bold text-gray-800">Cognitive Skill Analysis</h2>
+                        </div>
+                        <div className="flex gap-4 overflow-x-auto scrollbar-hide md:grid md:grid-cols-3 md:overflow-x-visible">
+                            <div className={`flex flex-col items-center rounded-xl p-4 border-2 min-w-[220px] ${analytics.cognitiveSkillSummary.conceptual === 'Strong' ? 'bg-green-100 border-green-300' : analytics.cognitiveSkillSummary.conceptual === 'Moderate' ? 'bg-yellow-100 border-yellow-300' : 'bg-red-100 border-red-300'}`}>
+                                <span className="text-2xl mb-2"><BookOpen className={`w-7 h-7 ${analytics.cognitiveSkillSummary.conceptual === 'Strong' ? 'text-green-600' : analytics.cognitiveSkillSummary.conceptual === 'Moderate' ? 'text-yellow-600' : 'text-red-600'}`} /></span>
+                                <span className="font-semibold text-gray-700">Conceptual Understanding</span>
+                                <span className={`mt-1 px-3 py-1 rounded-full text-sm font-bold ${analytics.cognitiveSkillSummary.conceptual === 'Strong' ? 'bg-green-200 text-green-800' : analytics.cognitiveSkillSummary.conceptual === 'Moderate' ? 'bg-yellow-200 text-yellow-800' : 'bg-red-200 text-red-800'}`}>{analytics.cognitiveSkillSummary.conceptual}</span>
+                            </div>
+                            <div className={`flex flex-col items-center rounded-xl p-4 border-2 min-w-[220px] ${analytics.cognitiveSkillSummary.reasoning === 'Logical' ? 'bg-blue-100 border-blue-300' : analytics.cognitiveSkillSummary.reasoning === 'Superficial' ? 'bg-yellow-100 border-yellow-300' : 'bg-orange-100 border-orange-300'}`}>
+                                <span className="text-2xl mb-2"><Lightbulb className={`w-7 h-7 ${analytics.cognitiveSkillSummary.reasoning === 'Logical' ? 'text-blue-600' : analytics.cognitiveSkillSummary.reasoning === 'Superficial' ? 'text-yellow-600' : 'text-orange-600'}`} /></span>
+                                <span className="font-semibold text-gray-700">Reasoning Skill</span>
+                                <span className={`mt-1 px-3 py-1 rounded-full text-sm font-bold ${analytics.cognitiveSkillSummary.reasoning === 'Logical' ? 'bg-blue-200 text-blue-800' : analytics.cognitiveSkillSummary.reasoning === 'Superficial' ? 'bg-yellow-200 text-yellow-800' : 'bg-orange-200 text-orange-800'}`}>{analytics.cognitiveSkillSummary.reasoning}</span>
+                            </div>
+                            <div className={`flex flex-col items-center rounded-xl p-4 border-2 min-w-[220px] ${analytics.cognitiveSkillSummary.confidence === 'High' ? 'bg-purple-100 border-purple-300' : analytics.cognitiveSkillSummary.confidence === 'Medium' ? 'bg-pink-100 border-pink-300' : 'bg-red-100 border-red-300'}`}>
+                                <span className="text-2xl mb-2"><Zap className={`w-7 h-7 ${analytics.cognitiveSkillSummary.confidence === 'High' ? 'text-purple-600' : analytics.cognitiveSkillSummary.confidence === 'Medium' ? 'text-pink-600' : 'text-red-600'}`} /></span>
+                                <span className="font-semibold text-gray-700">Confidence</span>
+                                <span className={`mt-1 px-3 py-1 rounded-full text-sm font-bold ${analytics.cognitiveSkillSummary.confidence === 'High' ? 'bg-purple-200 text-purple-800' : analytics.cognitiveSkillSummary.confidence === 'Medium' ? 'bg-pink-200 text-pink-800' : 'bg-red-200 text-red-800'}`}>{analytics.cognitiveSkillSummary.confidence}</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Cognitive Insights */}
                 {analytics.cognitiveInsights && analytics.cognitiveInsights.length > 0 && (
-                    <div className="shadow-lg border-0 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                    <div className="shadow-lg border-0 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 mb-6">
                         <div className="flex items-center gap-2 mb-4">
-                            <Brain className="w-6 h-6 text-blue-600" />
-                            <h2 className="text-xl font-bold text-gray-800">Cognitive Insights</h2>
+                            <Brain className="w-6 h-6 text-blue-600 animate-pulse" />
+                            <h2 className="text-xl font-bold text-gray-800">Common Mistakes</h2>
                         </div>
                         <div className="space-y-3">
                             {analytics.cognitiveInsights.map((insight: string, index: number) => (
-                                <div key={index} className="bg-white rounded-xl p-4 border border-blue-200">
-                                    <div className="flex items-start gap-3">
-                                        <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                                            <span className="text-white text-xs font-bold">{index + 1}</span>
-                                        </div>
-                                        <p className="text-gray-700 leading-relaxed">{insight}</p>
+                                <div key={index} className="bg-white rounded-xl p-4 border-l-4 border-blue-400 flex items-start gap-3 shadow-sm">
+                                    <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        <span className="text-white text-xs font-bold">{index + 1}</span>
                                     </div>
+                                    <p className="text-gray-700 leading-relaxed">{insight}</p>
                                 </div>
                             ))}
                         </div>
@@ -427,56 +424,52 @@ export default function SubjectAnalyticsPage() {
                 )}
 
                 {/* Strengths and Weaknesses */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {analytics.strengths && analytics.strengths.length > 0 && (
-                        <div className="shadow-lg border-0 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Trophy className="w-6 h-6 text-green-600" />
-                                <h2 className="text-xl font-bold text-gray-800">Your Strengths</h2>
+                        <div className="shadow-lg border-0 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 flex flex-col gap-2">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Trophy className="w-6 h-6 text-green-600 animate-bounce" />
+                                <h2 className="text-lg font-bold text-gray-800">Your Strengths</h2>
                             </div>
-                            <div className="space-y-2">
-                                {analytics.strengths.map((strength: string, index: number) => (
-                                    <div key={index} className="flex items-center gap-2">
-                                        <CheckCircle className="w-4 h-4 text-green-600" />
-                                        <span className="text-gray-700">{strength}</span>
-                                    </div>
-                                ))}
-                            </div>
+                            {analytics.strengths.map((strength: string, index: number) => (
+                                <div key={index} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 shadow-sm">
+                                    <CheckCircle className="w-4 h-4 text-green-600" />
+                                    <span className="text-gray-700 font-semibold">{strength}</span>
+                                </div>
+                            ))}
                         </div>
                     )}
 
                     {analytics.weaknesses && analytics.weaknesses.length > 0 && (
-                        <div className="shadow-lg border-0 bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl p-6">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Flame className="w-6 h-6 text-red-600" />
-                                <h2 className="text-xl font-bold text-gray-800">Areas for Improvement</h2>
+                        <div className="shadow-lg border-0 bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl p-6 flex flex-col gap-2">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Flame className="w-6 h-6 text-red-600 animate-bounce" />
+                                <h2 className="text-lg font-bold text-gray-800">Areas for Improvement</h2>
                             </div>
-                            <div className="space-y-2">
-                                {analytics.weaknesses.map((weakness: string, index: number) => (
-                                    <div key={index} className="flex items-center gap-2">
-                                        <AlertCircle className="w-4 h-4 text-red-600" />
-                                        <span className="text-gray-700">{weakness}</span>
-                                    </div>
-                                ))}
-                            </div>
+                            {analytics.weaknesses.map((weakness: string, index: number) => (
+                                <div key={index} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 shadow-sm">
+                                    <AlertCircle className="w-4 h-4 text-red-600" />
+                                    <span className="text-gray-700 font-semibold">{weakness}</span>
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>
 
                 {/* Mobile Navigation */}
-                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden">
-                    <div className="flex justify-around py-2">
-                        <Link href="/student/dashboard" className="flex flex-col items-center py-2 px-4 text-gray-400">
-                            <Home className="w-5 h-5" />
-                            <span className="text-xs mt-1">Home</span>
+                <div className="fixed bottom-3 left-0 right-0 flex justify-center z-50 md:hidden">
+                    <div className="flex justify-around w-[95vw] max-w-md mx-auto bg-white/80 backdrop-blur-lg border border-gray-200 rounded-2xl shadow-2xl px-4 py-2">
+                        <Link href="/student/dashboard" className="flex flex-col items-center px-3 py-2 group">
+                            <Home className="w-7 h-7 mb-1 group-hover:text-purple-600 text-gray-400 transition-colors" />
+                            <span className="text-xs font-semibold group-hover:text-purple-600 text-gray-500">Home</span>
                         </Link>
-                        <Link href="/student/analytics" className="flex flex-col items-center py-2 px-4 text-purple-600">
-                            <BarChart3 className="w-5 h-5" />
-                            <span className="text-xs mt-1">Analytics</span>
+                        <Link href="/student/analytics" className="flex flex-col items-center px-3 py-2 group">
+                            <BarChart3 className="w-7 h-7 mb-1 group-hover:text-purple-600 text-purple-600 transition-colors" />
+                            <span className="text-xs font-semibold group-hover:text-purple-600 text-purple-600">Analytics</span>
                         </Link>
-                        <Link href="/student/profile" className="flex flex-col items-center py-2 px-4 text-gray-400">
-                            <User className="w-5 h-5" />
-                            <span className="text-xs mt-1">Profile</span>
+                        <Link href="/student/profile" className="flex flex-col items-center px-3 py-2 group">
+                            <User className="w-7 h-7 mb-1 group-hover:text-purple-600 text-gray-400 transition-colors" />
+                            <span className="text-xs font-semibold group-hover:text-purple-600 text-gray-500">Profile</span>
                         </Link>
                     </div>
                 </div>

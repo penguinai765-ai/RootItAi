@@ -121,6 +121,7 @@ export function buildQuestionContext(sessionData: SessionData, questionNumber: n
             isCorrect: a.isCorrect,
             cognitiveAnalysis: a.cognitiveAnalysis
         })),
+        previousAnswers, // Pass the full previousAnswers array for LLM prompt
         skillsCovered
     };
 }
@@ -162,12 +163,21 @@ export async function buildLLMPrompt(
         previous: prevSkillSummary,
         current: currSkillSummary
     };
+    // Debug log: print previousAnswers array
+    console.log('[LLM DEBUG] context.previousAnswers:', context.previousAnswers);
+    // Gather all previous question texts (use actual previousAnswers if available)
+    const previousAnswersArr = context.previousAnswers || [];
+    const previousQuestionTexts = previousAnswersArr.length > 0
+        ? previousAnswersArr.map((a: any, idx: number) => `Q${idx + 1}: ${a.question || ''}`).join('\n')
+        : (context.previousAnswersSummary || []).map((a: any, idx: number) => `Q${idx + 1}: ${a.question || ''}`).join('\n');
     const systemPrompt = `
 You are an expert AI tutor creating a personalized, adaptive quiz for a high-school student.
 - Use the student's previous performance on this chapter (see skill summary) to adapt the quiz.
 - Cycle through these cognitive skills: factual recall, conceptual understanding, and reasoning/logic. Use the skill summary to decide which skill to target next.
+- You MUST ensure that in a 15-question quiz, at least one question targets each cognitive skill (recall, conceptual, reasoning/problem-solving). The rest should be balanced.
 - If a skill is weak (low correct rate), ask more questions of that type. If strong, move to the next skill.
 - Do NOT repeat the same or very similar questions in this session.
+- Here are the questions already asked in this session:\n${previousQuestionTexts}
 - You must generate at most 15 questions per quiz session. If 15 questions have been asked, the quiz must end, even if not all skills are fully mastered.
 - Ensure all cognitive skills are covered and analyzed within these 15 questions. Prioritize skills that have not yet been sufficiently covered.
 - End the quiz early if the student has demonstrated sufficient ability in all skills (e.g., at least 2 correct answers per skill, or clear mastery/struggle).
@@ -184,6 +194,9 @@ You are an expert AI tutor creating a personalized, adaptive quiz for a high-sch
   - 'requestConfidenceRating' boolean (true if the student should rate their confidence after this question)
 - Cognitive scores should be between 0.1 and 1.0.
 - Output ONLY the JSON for the single question, nothing else.
+- You may use content, examples, or analogies beyond the textbook if they are relevant to the subtopic and appropriate for the student's level. The main context is the textbook, but you are encouraged to introduce real-world or applied reasoning when it helps assess deeper understanding.
+- For the 'requestConfidenceRating' flag: set it to true for about 5 or 6 questions out of 15, chosen randomly. Do not set it to true for every question.
+- Here is a running tally of skill coverage so far (current session): ${JSON.stringify(currSkillSummary)}
     `;
     const userPrompt = `
         Context:
@@ -198,6 +211,9 @@ You are an expert AI tutor creating a personalized, adaptive quiz for a high-sch
         ${context.subtopicContent}
         ---
     `;
+    // Detailed debug log
+    console.log('[LLM PROMPT DEBUG] systemPrompt:', systemPrompt);
+    console.log('[LLM PROMPT DEBUG] userPrompt:', userPrompt);
     return { systemPrompt, userPrompt };
 }
 
@@ -250,6 +266,7 @@ The performanceScore should be computed using: number of correct/wrong answers, 
             max_tokens: 3000,
         })
     });
+    // Removed logFetchResponse call (not defined in this file)
     if (!response.ok) {
         const errorBody = await response.text();
         throw new Error(`Mistral API request failed: ${errorBody}`);
@@ -258,13 +275,47 @@ The performanceScore should be computed using: number of correct/wrong answers, 
     const content = llmResponse.choices[0]?.message?.content;
     if (!content) throw new Error('No content in LLM response');
     // Use the same extractAndParseJson logic as in route.ts
-    const startIndex = content.indexOf('{');
-    const endIndex = content.lastIndexOf('}');
-    if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
-        throw new Error('No valid JSON object found in the LLM response.');
+    let llmEval = null;
+    try {
+        // Try to parse the whole response as JSON first
+        llmEval = JSON.parse(content);
+    } catch {
+        // If that fails, try to extract JSON from within the string
+        const match = content.match(/\{[\s\S]*\}/);
+        if (match) {
+            try {
+                llmEval = JSON.parse(match[0]);
+            } catch {
+                llmEval = null;
+            }
+        }
     }
-    const jsonString = content.substring(startIndex, endIndex + 1);
-    return JSON.parse(jsonString);
+    if (!llmEval) {
+        throw new Error('No valid JSON object found in the LLM response after all attempts.');
+    }
+    return llmEval;
+}
+
+// --- Helper: Robust JSON Extraction ---
+function extractAndParseJson(content: string): any {
+    let cleaned = content.trim();
+    // Remove code block markers and leading/trailing text
+    if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/, '').trim();
+    }
+    // 1. Try to parse the whole cleaned string as JSON
+    try {
+        return JSON.parse(cleaned);
+    } catch { }
+    // 2. Use regex to extract the first {...} block and parse it
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) {
+        try {
+            return JSON.parse(match[0]);
+        } catch { }
+    }
+    // 3. If all fails, return null
+    return null;
 }
 
 /**
@@ -274,29 +325,105 @@ The performanceScore should be computed using: number of correct/wrong answers, 
 export async function processStudentAnswer(currentQuestion: any, studentAnswer: any, callLLM: Function): Promise<object> {
     let isCorrect = false;
     let feedback = '';
+    let correctAnswer = currentQuestion.correctAnswer;
+    let explanation = currentQuestion.explanation;
     if (currentQuestion.type === 'mcq') {
         isCorrect = currentQuestion.correctAnswer === studentAnswer;
         feedback = isCorrect ? "Correct! Well done." : `Not quite. The correct answer is ${currentQuestion.correctAnswer}.`;
     } else if (currentQuestion.type === 'short_answer') {
-        // Use a simple regex or keyword match for now
-        if (currentQuestion.answerPattern) {
-            try {
-                const regex = new RegExp(currentQuestion.answerPattern, 'i');
-                isCorrect = regex.test(studentAnswer);
-            } catch {
-                // fallback to keyword match
+        // Use LLM to evaluate the answer, with strict JSON format
+        const systemPrompt = `You are an expert tutor. Evaluate the student's answer to the following question. Return ONLY a valid JSON object with keys: isCorrect (boolean), correctAnswer (string, natural language), feedback (string, natural language), explanation (string, natural language). Do NOT return any extra text, markdown, or code block. If the answer is partially correct, mark isCorrect as true but mention in feedback.`;
+        const userPrompt = `Question: ${currentQuestion.question}\nStudent Answer: ${studentAnswer}\nExpected Answer: ${currentQuestion.answerPattern || (currentQuestion.expectedKeywords ? currentQuestion.expectedKeywords.join(', ') : '')}`;
+        let llmEval: any = null;
+        try {
+            // --- BEGIN DEBUG FETCH ---
+            const fetchRes = await fetch('https://api.mistral.ai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: 'mistral-large-latest',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userPrompt }
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 1000,
+                })
+            });
+            // Removed logFetchResponse call (not defined in this file)
+            if (!fetchRes.ok) {
+                const errorBody = await fetchRes.text();
+                console.error('[LLM FETCH ERROR - Short Answer Evaluation]', {
+                    status: fetchRes.status,
+                    statusText: fetchRes.statusText,
+                    errorBody,
+                    systemPrompt,
+                    userPrompt
+                });
+                throw new Error(`LLM fetch failed: ${fetchRes.status} ${fetchRes.statusText}`);
+            }
+            const llmResponse = await fetchRes.json();
+            const content = llmResponse.choices?.[0]?.message?.content;
+            if (!content) {
+                console.error('[LLM FETCH ERROR - No content in response]', { llmResponse, systemPrompt, userPrompt });
+                throw new Error('No content in LLM response');
+            }
+            llmEval = extractAndParseJson(content);
+            if (llmEval) {
+                console.log('[LLM PARSE] Robust JSON extraction succeeded:', llmEval);
+            } else {
+                console.log('[LLM PARSE] Robust JSON extraction failed.');
+            }
+            // --- END DEBUG FETCH ---
+        } catch (err) {
+            console.error('[LLM ERROR - Short Answer Evaluation]', {
+                error: err,
+                systemPrompt,
+                userPrompt
+            });
+            llmEval = null;
+        }
+        if (llmEval && typeof llmEval.isCorrect === 'boolean') {
+            isCorrect = llmEval.isCorrect;
+            // Always include congratulatory message and explanation in feedback if correct
+            if (isCorrect) {
+                feedback = `Correct! Well done. ${llmEval.explanation || llmEval.feedback || ''}`.trim();
+            } else {
+                feedback = llmEval.feedback || `Not quite. ${currentQuestion.explanation}`;
+            }
+            correctAnswer = llmEval.correctAnswer || "See explanation below.";
+            explanation = llmEval.explanation || llmEval.feedback || feedback;
+        } else {
+            // Fallback to regex/keyword logic
+            if (currentQuestion.answerPattern) {
+                try {
+                    const regex = new RegExp(currentQuestion.answerPattern, 'i');
+                    isCorrect = regex.test(studentAnswer);
+                } catch {
+                    isCorrect = (currentQuestion.expectedKeywords || []).some((kw: string) => studentAnswer.toLowerCase().includes(kw.toLowerCase()));
+                }
+            } else if (currentQuestion.expectedKeywords) {
                 isCorrect = (currentQuestion.expectedKeywords || []).some((kw: string) => studentAnswer.toLowerCase().includes(kw.toLowerCase()));
             }
-        } else if (currentQuestion.expectedKeywords) {
-            isCorrect = (currentQuestion.expectedKeywords || []).some((kw: string) => studentAnswer.toLowerCase().includes(kw.toLowerCase()));
+            // Always include congratulatory message and explanation in feedback if correct
+            if (isCorrect) {
+                feedback = `Correct! Well done. ${currentQuestion.explanation || ''}`.trim();
+            } else {
+                feedback = `Not quite. ${currentQuestion.explanation}`;
+            }
+            correctAnswer = "(LLM unavailable, fallback to keyword match)";
+            explanation = feedback;
         }
-        feedback = isCorrect ? "Correct! Well done." : `Not quite. ${currentQuestion.explanation}`;
     }
     return {
         isCorrect,
         feedback,
-        explanation: currentQuestion.explanation,
+        explanation,
         cognitiveAnalysis: currentQuestion.cognitiveAnalysis,
+        correctAnswer,
     };
 }
 

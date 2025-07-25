@@ -35,6 +35,7 @@ import {
     Award,
     AlertCircle,
 } from "lucide-react";
+import LoadingLottie from "@/components/LoadingLottie";
 
 interface StudentData {
     id: string;
@@ -296,8 +297,7 @@ export default function QuizReportPage() {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Loading quiz report...</p>
+                    <LoadingLottie message="Loading quiz report..." />
                 </div>
             </div>
         );
@@ -509,7 +509,7 @@ export default function QuizReportPage() {
                                             <span className="text-sm text-gray-600">Division {student.division}</span>
                                             <div className="flex items-center space-x-2">
                                                 <span className="text-lg font-bold text-red-600">
-                                                    {student.score}%
+                                                    {Math.round(student.score ?? 0)}%
                                                 </span>
                                                 <AlertCircle className="w-4 h-4 text-red-500" />
                                             </div>
@@ -554,7 +554,7 @@ export default function QuizReportPage() {
                                             <span className="text-sm text-gray-600">Division {student.division}</span>
                                             <div className="flex items-center space-x-2">
                                                 <span className="text-lg font-bold text-yellow-600">
-                                                    {student.score}%
+                                                    {Math.round(student.score ?? 0)}%
                                                 </span>
                                                 <Minus className="w-4 h-4 text-yellow-500" />
                                             </div>
@@ -596,7 +596,7 @@ export default function QuizReportPage() {
                                             <span className="text-sm text-gray-600">Division {student.division}</span>
                                             <div className="flex items-center space-x-2">
                                                 <span className="text-lg font-bold text-green-600">
-                                                    {student.score}%
+                                                    {Math.round(student.score ?? 0)}%
                                                 </span>
                                                 <Award className="w-4 h-4 text-green-500" />
                                             </div>

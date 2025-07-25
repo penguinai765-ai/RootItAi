@@ -416,17 +416,26 @@ export const getStudentAnalytics = async (uid: string) => {
         });
 
         // Create detailedAnalysisHistory from the submissions
-        const detailedAnalysisHistory = allSubmissions
-            .map(sub => ({
-                date: sub.lastAttempted?.toDate?.() || new Date(sub.lastAttempted),
-                subjectCode: sub.subjectCode,
-                chapterId: sub.chapterId,
-                score: sub.score,
-                analysis: sub.analysis
-            }))
-            .filter(r => r.analysis);
+        const detailedAnalysisHistory = await Promise.all(
+            allSubmissions.map(async sub => {
+                const names = await mapQuizIdsToNames(sub.subjectCode, sub.chapterId, sub.subtopicId);
+                return {
+                    date: sub.lastAttempted?.toDate?.() || new Date(sub.lastAttempted),
+                    subjectCode: sub.subjectCode,
+                    subjectName: names.subjectName,
+                    chapterId: sub.chapterId,
+                    chapterName: names.chapterName,
+                    subtopicId: sub.subtopicId,
+                    subtopicName: names.subtopicName,
+                    score: sub.score,
+                    analysis: sub.analysis
+                };
+            })
+        );
+        // Filter out entries without analysis
+        const filteredDetailedAnalysisHistory = detailedAnalysisHistory.filter(r => r.analysis);
 
-        console.log("Detailed analysis history created:", detailedAnalysisHistory.length);
+        console.log("Detailed analysis history created:", filteredDetailedAnalysisHistory.length);
 
         // Create detailedReports for compatibility with existing analytics logic
         const detailedReports = allSubmissions.map(sub => ({
@@ -541,7 +550,7 @@ export const getStudentAnalytics = async (uid: string) => {
             domainPerformance,
             subtopicAnalytics,
             subtopicTrends: finalSubtopicTrends,
-            detailedAnalysisHistory, // <-- add this
+            detailedAnalysisHistory: filteredDetailedAnalysisHistory, // <-- add this
         };
     } catch (error) {
         console.error("Error in getStudentAnalytics:", error);
@@ -743,7 +752,10 @@ export const getTeacherAnalytics = async (teacherId: string) => {
     const chapterPerformance = Array.from(chapterAnalyticsMap.entries()).map(([name, scores]) => ({
         name,
         averageScore: scores.reduce((a, b) => a + b, 0) / scores.length,
-        struggling: Math.round((scores.filter(s => s < 50).length / scores.length) * 100)
+        struggling: Math.round((scores.filter(s => s < 50).length / scores.length) * 100),
+        maxScore: scores.length > 0 ? Math.max(...scores) : null,
+        minScore: scores.length > 0 ? Math.min(...scores) : null,
+        scores // include raw scores for possible future use
     }));
 
     // Find best and worst performing students for cognitive skills
@@ -1063,7 +1075,8 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
             progressOverTime: [],
             cognitiveInsights: [],
             strengths: [],
-            weaknesses: []
+            weaknesses: [],
+            cognitiveSkillSummary: null
         };
     }
 
@@ -1124,13 +1137,18 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
 
     // Get chapter names from textbook
     const textbookCache = new Map();
+    let resolvedSubjectName = subjectCode;
     try {
+        const subjectDoc = await getDoc(doc(db, 'textbook', subjectCode));
+        if (subjectDoc.exists()) {
+            resolvedSubjectName = subjectDoc.data()["subject name"] || subjectDoc.data().name || subjectCode;
+        }
         const chaptersSnap = await getDocs(collection(db, `textbook/${subjectCode}/chapters`));
         chaptersSnap.docs.forEach(doc => {
             textbookCache.set(doc.id, doc.data().chaptername || doc.id);
         });
     } catch (error) {
-        console.error("Error fetching chapter names:", error);
+        console.error("Error fetching chapter/subject names:", error);
     }
 
     // Calculate chapter performance
@@ -1177,10 +1195,11 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
             };
         });
 
-        // Find strongest and weakest subtopics
-        const sortedSubtopics = subtopics.sort((a: any, b: any) => b.averageScore - a.averageScore);
-        const strongest = sortedSubtopics[0];
-        const weakest = sortedSubtopics[sortedSubtopics.length - 1];
+        // Find strongest subtopic (highest average)
+        const sortedSubtopics = [...subtopics].sort((a: any, b: any) => b.averageScore - a.averageScore);
+        const strongest = sortedSubtopics[0] && sortedSubtopics[0].averageScore > 50 ? sortedSubtopics[0] : null;
+        // Find needs work subtopics (average < 50%)
+        const needsWork = subtopics.filter((s: any) => s.averageScore < 50).map((s: any) => s.name);
 
         return {
             id: chapterId,
@@ -1189,7 +1208,7 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
             attempts: submissions.length,
             subtopics,
             strongest: strongest?.name || "N/A",
-            weakest: weakest?.name || "N/A",
+            needsWork,
             trend: submissions.map((s: any) => ({
                 date: s.lastAttempted?.toDate?.() || new Date(s.lastAttempted),
                 score: s.score
@@ -1246,6 +1265,30 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
         }
     }
 
+    let conceptualSum = 0, reasoningSum = 0, confidenceSum = 0, count = 0;
+    allAnalysis.forEach(a => {
+        if (a.conceptualUnderstanding) {
+            conceptualSum += a.conceptualUnderstanding === "Strong" ? 100 : a.conceptualUnderstanding === "Moderate" ? 60 : 30;
+            count++;
+        }
+        if (a.reasoningSkill) {
+            reasoningSum += a.reasoningSkill === "Logical" ? 100 : a.reasoningSkill === "Superficial" ? 60 : 30;
+        }
+        if (a.confidenceScore) {
+            confidenceSum += a.confidenceScore === "High" ? 100 : a.confidenceScore === "Medium" ? 60 : 30;
+        }
+    });
+    const getQualitative = (score: number, labels: string[]): string => {
+        if (score >= 85) return labels[0];
+        if (score >= 60) return labels[1];
+        return labels[2];
+    };
+    const cognitiveSkillSummary = count > 0 ? {
+        conceptual: getQualitative(conceptualSum / count, ["Strong", "Moderate", "Weak"]),
+        reasoning: getQualitative(reasoningSum / count, ["Logical", "Superficial", "Guesswork"]),
+        confidence: getQualitative(confidenceSum / count, ["High", "Medium", "Low"])
+    } : null;
+
     // Identify strengths and weaknesses
     const strengths = chapterPerformance
         .filter(chapter => chapter.averageScore >= 70)
@@ -1257,7 +1300,7 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
 
     return {
         subjectCode,
-        subjectName: textbookCache.get(subjectCode) || subjectCode,
+        subjectName: resolvedSubjectName,
         summary: {
             averageScore: Math.round(averageScore),
             quizzesAttempted,
@@ -1326,7 +1369,8 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
         })(),
         cognitiveInsights,
         strengths,
-        weaknesses
+        weaknesses,
+        cognitiveSkillSummary
     }
 }
 
@@ -1453,3 +1497,37 @@ export const getStudentSubtopicProgress = async (studentId: string, subtopicName
         };
     }
 };
+
+// Fetch all student ratings for a particular date and compute average
+export const getClassRatingsForDate = async (subjectCode: string, date: string) => {
+    const studentRatingsRef = collection(db, `classRating/${subjectCode}/dailyRatings/${date}/studentRatings`);
+    const studentRatingsSnap = await getDocs(studentRatingsRef);
+    const ratings = studentRatingsSnap.docs.map(doc => doc.data().rating).filter(r => typeof r === 'number');
+    const count = ratings.length;
+    const average = count > 0 ? ratings.reduce((a, b) => a + b, 0) / count : 0;
+    return { average, count, ratings };
+};
+
+// Utility function to map IDs to names
+async function mapQuizIdsToNames(subjectCode: string, chapterId: string, subtopicId: string) {
+    let subjectName = subjectCode;
+    let chapterName = chapterId;
+    let subtopicName = subtopicId;
+    try {
+        const subjectDoc = await getDoc(doc(db, 'textbook', subjectCode));
+        if (subjectDoc.exists()) {
+            subjectName = subjectDoc.data()["subject name"] || subjectDoc.data().name || subjectCode;
+        }
+        const chapterDoc = await getDoc(doc(db, `textbook/${subjectCode}/chapters/${chapterId}`));
+        if (chapterDoc.exists()) {
+            chapterName = chapterDoc.data().chaptername || chapterId;
+        }
+        const subtopicDoc = await getDoc(doc(db, `textbook/${subjectCode}/chapters/${chapterId}/subtopics/${subtopicId}`));
+        if (subtopicDoc.exists()) {
+            subtopicName = subtopicDoc.data().title || subtopicId;
+        }
+    } catch (e) {
+        // fallback to code/ID
+    }
+    return { subjectName, chapterName, subtopicName };
+}

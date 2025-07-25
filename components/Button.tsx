@@ -7,7 +7,8 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export default function Button({ children, className = '', ...props }: ButtonProps) {
-  const baseClass = "w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md md:py-4 md:text-lg md:px-10";
+  // Remove width and padding from baseClass so className can control size
+  const baseClass = "flex items-center justify-center border border-transparent font-medium rounded-md";
   const enabledClass = "text-white bg-indigo-600 hover:bg-indigo-700";
   const disabledClass = "bg-gray-400 text-gray-700 cursor-not-allowed";
   const isDisabled = props.disabled;
@@ -15,7 +16,7 @@ export default function Button({ children, className = '', ...props }: ButtonPro
   return (
     <button
       {...props}
-      className={`${baseClass} ${isDisabled ? disabledClass : enabledClass} ${className}`.trim()}
+      className={`${className} ${isDisabled ? disabledClass : enabledClass} ${baseClass}`.trim()}
     >
       {children}
     </button>
