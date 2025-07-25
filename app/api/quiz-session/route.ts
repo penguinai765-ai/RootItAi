@@ -12,6 +12,8 @@ import {
 import { getQuizDoc } from '@/lib/quizEngineAdmin';
 import { getStudentProfile } from '@/lib/firestoreServiceAdmin';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 function extractAndParseJson(text: string | undefined): any {
   if (!text) {
@@ -228,22 +230,19 @@ export async function POST(request: Request) {
         if (!studentId || !assignedQuizId || !sessionData || !previousAnswers) {
           throw new Error("Missing required data for quiz completion.");
         }
-        const analytics = await updatePerformanceAnalytics(studentId, assignedQuizId, sessionData, previousAnswers);
         const quizStartTime = previousAnswers[0]?.timestamp || Date.now();
         const quizEndTime = previousAnswers[previousAnswers.length - 1]?.timestamp || Date.now();
         const context = buildQuestionContext(sessionData, previousAnswers.length, previousAnswers);
         const analysis = await getLLMQuizAnalysis(studentId, context, previousAnswers, quizStartTime, quizEndTime);
-        console.log("[quiz-session] complete: analytics:", analytics);
         console.log("[quiz-session] complete: analysis:", analysis);
-        // Use Admin SDK for Firestore batch write
-        const submissionRef = adminDb
-          .collection('quizActivations')
-          .doc(assignedQuizId)
-          .collection('submissions')
-          .doc(studentId);
-        const batch = adminDb.batch();
-        batch.set(submissionRef, { analysis }, { merge: true });
-        await batch.commit();
+
+        // Get analytics and include analysis in the same batch operation
+        const analytics = await updatePerformanceAnalytics(studentId, assignedQuizId, sessionData, previousAnswers);
+
+        // Update the submission document to include the analysis
+        const submissionRef = doc(db, `quizActivations/${assignedQuizId}/submissions`, studentId);
+        await setDoc(submissionRef, { analysis }, { merge: true });
+
         result = { message: "Quiz completed and analytics saved successfully.", analytics, analysis };
         break;
       }
