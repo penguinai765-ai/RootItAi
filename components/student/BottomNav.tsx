@@ -8,7 +8,6 @@ import { Home, BarChart3, User, BookOpen, Target } from 'lucide-react';
 const navItems = [
   { href: '/student/dashboard', icon: Home, label: 'Home' },
   { href: '/student/analytics', icon: BarChart3, label: 'Analytics' },
-  { href: '/student/plan', icon: Target, label: 'Plan' },
   { href: '/student/profile', icon: User, label: 'Profile' },
 ];
 
@@ -32,14 +31,14 @@ const BottomNav = () => {
               >
                 <Icon
                   className={`w-6 h-6 mb-1 transition-all duration-200 ${isActive
-                      ? 'text-purple-600 scale-110'
-                      : 'text-gray-400 group-hover:text-purple-500 group-hover:scale-105'
+                    ? 'text-purple-600 scale-110'
+                    : 'text-gray-400 group-hover:text-purple-500 group-hover:scale-105'
                     }`}
                 />
                 <span
                   className={`text-xs font-semibold transition-all duration-200 ${isActive
-                      ? 'text-purple-600'
-                      : 'text-gray-500 group-hover:text-purple-500'
+                    ? 'text-purple-600'
+                    : 'text-gray-500 group-hover:text-purple-500'
                     }`}
                 >
                   {item.label}
@@ -71,20 +70,20 @@ const BottomNav = () => {
                   key={item.href}
                   href={item.href}
                   className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
-                      ? 'bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200/50'
-                      : 'hover:bg-gray-50'
+                    ? 'bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200/50'
+                    : 'hover:bg-gray-50'
                     }`}
                 >
                   <Icon
                     className={`w-5 h-5 mr-3 transition-all duration-200 ${isActive
-                        ? 'text-purple-600'
-                        : 'text-gray-400 group-hover:text-purple-500'
+                      ? 'text-purple-600'
+                      : 'text-gray-400 group-hover:text-purple-500'
                       }`}
                   />
                   <span
                     className={`font-medium transition-all duration-200 ${isActive
-                        ? 'text-purple-600'
-                        : 'text-gray-700 group-hover:text-purple-500'
+                      ? 'text-purple-600'
+                      : 'text-gray-700 group-hover:text-purple-500'
                       }`}
                   >
                     {item.label}
