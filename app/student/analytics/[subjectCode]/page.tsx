@@ -216,7 +216,7 @@ export default function SubjectAnalyticsPage() {
                                     {Object.keys(analytics.progressOverTime).map((chapterName, index) => (
                                         <Line
                                             key={chapterName}
-                                            data={analytics.progressOverTime[chapterName].map(point => ({ ...point, x: point.x - 1 }))}
+                                            data={analytics.progressOverTime[chapterName].map((point: { x: number; y: number }) => ({ ...point, x: point.x - 1 }))}
                                             type="monotone"
                                             dataKey="y"
                                             name={chapterName}
