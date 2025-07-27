@@ -1315,7 +1315,7 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
         chapterPerformance,
         subtopicPerformance, // <-- add this line
         progressOverTime: (() => {
-            // Calculate progress over time with quiz attempt index and cumulative averages
+            // Calculate progress over time with individual quiz scores
             const progressOverTime: any[] = [];
             const chapterCumulativeScores = new Map(); // chapterId -> cumulative scores array
 
@@ -1353,10 +1353,16 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
                     date: `Attempt ${attemptIndex + 1}` // X-axis label
                 };
 
-                // Add cumulative averages for all chapters
+                // Add individual quiz scores for all chapters (use actual score for current chapter, cumulative for others)
                 chapterCumulativeScores.forEach((chapterData, chapterId) => {
                     const chapterName = textbookCache.get(chapterId) || chapterId;
-                    dataPoint[chapterName] = Math.round(chapterData.cumulativeAverage);
+                    if (chapterId === sub.chapterId) {
+                        // Use actual quiz score for the current chapter
+                        dataPoint[chapterName] = sub.score;
+                    } else {
+                        // Use cumulative average for other chapters (to maintain continuity)
+                        dataPoint[chapterName] = Math.round(chapterData.cumulativeAverage);
+                    }
                 });
 
                 progressOverTime.push(dataPoint);

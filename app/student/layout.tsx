@@ -9,7 +9,10 @@ export default function StudentLayout({
 }) {
   return (
     <div className="relative min-h-screen bg-gray-50">
-      <main className="pb-20">{children}</main>
+      {/* Main content with responsive padding */}
+      <main className="pb-20 md:pb-0 md:pl-64">
+        {children}
+      </main>
       <BottomNav />
     </div>
   );

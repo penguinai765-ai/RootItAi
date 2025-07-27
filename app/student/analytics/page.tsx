@@ -530,23 +530,7 @@ export default function StudentAnalyticsPage() {
             </ResponsiveContainer>
           </div>
         </div>
-        {/* Mobile Navigation */}
-        <div className="fixed bottom-3 left-0 right-0 flex justify-center z-50 md:hidden">
-          <div className="flex justify-around w-[95vw] max-w-md mx-auto bg-white/80 backdrop-blur-lg border border-gray-200 rounded-2xl shadow-2xl px-4 py-2">
-            <Link href="/student/dashboard" className="flex flex-col items-center px-3 py-2 group">
-              <Home className="w-7 h-7 mb-1 group-hover:text-purple-600 text-gray-400 transition-colors" />
-              <span className="text-xs font-semibold group-hover:text-purple-600 text-gray-500">Home</span>
-            </Link>
-            <Link href="/student/analytics" className="flex flex-col items-center px-3 py-2 group">
-              <BarChart3 className="w-7 h-7 mb-1 group-hover:text-purple-600 text-purple-600 transition-colors" />
-              <span className="text-xs font-semibold group-hover:text-purple-600 text-purple-600">Analytics</span>
-            </Link>
-            <Link href="/student/profile" className="flex flex-col items-center px-3 py-2 group">
-              <User className="w-7 h-7 mb-1 group-hover:text-purple-600 text-gray-400 transition-colors" />
-              <span className="text-xs font-semibold group-hover:text-purple-600 text-gray-500">Profile</span>
-            </Link>
-          </div>
-        </div>
+
       </div>
       <InfoModal open={infoModal.open} text={infoModal.text} onClose={() => setInfoModal({ open: false, text: "" })} />
       {showQuizInfo && (

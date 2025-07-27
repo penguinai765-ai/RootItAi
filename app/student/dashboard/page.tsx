@@ -199,17 +199,17 @@ export default function StudentHomePage() {
 
   // --- UI ---
   return (
-    <div className="min-h-screen bg-white">
-      {/* Top Header */}
-      <div className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-50">
-        <div className="px-3 py-2">
+    <div className="min-h-screen bg-gray-50">
+      {/* Top Header - Responsive */}
+      <div className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-50 md:ml-64">
+        <div className="px-3 py-3 md:px-6 md:py-4">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <h1 className="text-lg font-bold text-gray-900 truncate">Welcome, {studentName}</h1>
-              <p className="text-xs text-gray-600 mt-0.5">Class: {className}</p>
+              <h1 className="text-lg md:text-xl font-bold text-gray-900 truncate">Welcome, {studentName}</h1>
+              <p className="text-xs md:text-sm text-gray-600 mt-0.5">Class: {className}</p>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-purple-100 text-purple-700 font-semibold flex items-center justify-center rounded-full text-base">
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold flex items-center justify-center rounded-full text-base md:text-lg shadow-lg">
                 {studentName?.split(" ").map((n: string) => n[0]).join("")}
               </div>
               <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -218,7 +218,7 @@ export default function StudentHomePage() {
         </div>
       </div>
 
-      <div className="px-3 py-4 space-y-6 pb-24">
+      <div className="px-3 py-4 md:px-6 md:py-6 space-y-6 pb-24 md:pb-6">
         {/* Active Quiz Section */}
         <section>
           <div className="flex items-center justify-between mb-4">
