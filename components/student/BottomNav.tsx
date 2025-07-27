@@ -18,8 +18,8 @@ const BottomNav = () => {
   return (
     <>
       {/* Mobile Bottom Navigation */}
-      <nav className="fixed bottom-3 left-0 right-0 flex justify-center z-50 md:hidden">
-        <div className="flex justify-around w-[95vw] max-w-md mx-auto bg-white/90 backdrop-blur-lg border border-gray-200/50 rounded-2xl shadow-2xl px-4 py-3">
+      <nav className="fixed bottom-0 left-0 right-0 flex justify-center z-50 md:hidden pb-[env(safe-area-inset-bottom)]">
+        <div className="flex justify-around w-[95vw] max-w-md mx-auto bg-white/90 backdrop-blur-lg border border-gray-200/50 rounded-t-2xl shadow-2xl px-4 py-3">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
             const Icon = item.icon;

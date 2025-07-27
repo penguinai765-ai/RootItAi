@@ -1315,9 +1315,10 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
         chapterPerformance,
         subtopicPerformance, // <-- add this line
         progressOverTime: (() => {
-            // Calculate progress over time with individual quiz scores
+            // Calculate progress over time with chapter average (not cumulative), carry forward last known average, always include all chapters
             const progressOverTime: any[] = [];
-            const chapterCumulativeScores = new Map(); // chapterId -> cumulative scores array
+            const chapterScores = new Map(); // chapterId -> array of scores up to this attempt
+            const lastKnownAverages = new Map(); // chapterId -> last known average
 
             // Sort submissions by start time (oldest to newest)
             const sortedSubmissions = [...subjectSubmissions].sort((a, b) => {
@@ -1326,26 +1327,16 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
                 return dateA.getTime() - dateB.getTime();
             });
 
-            // Initialize cumulative scores for each chapter
-            sortedSubmissions.forEach(sub => {
-                const chapterId = sub.chapterId;
-                if (!chapterCumulativeScores.has(chapterId)) {
-                    chapterCumulativeScores.set(chapterId, {
-                        scores: [],
-                        cumulativeAverage: 0
-                    });
-                }
-            });
+            // Get all unique chapterIds
+            const allChapterIds = Array.from(new Set(sortedSubmissions.map(sub => sub.chapterId)));
 
-            // Process each quiz attempt chronologically
+            // For each attempt, build the data point
             sortedSubmissions.forEach((sub, attemptIndex) => {
-                const chapterId = sub.chapterId;
-                const chapterName = textbookCache.get(chapterId) || chapterId;
-
-                // Update cumulative average for this chapter
-                const chapterData = chapterCumulativeScores.get(chapterId);
-                chapterData.scores.push(sub.score);
-                chapterData.cumulativeAverage = chapterData.scores.reduce((sum: number, score: number) => sum + score, 0) / chapterData.scores.length;
+                // Add this score to the chapter's score list
+                if (!chapterScores.has(sub.chapterId)) {
+                    chapterScores.set(sub.chapterId, []);
+                }
+                chapterScores.get(sub.chapterId).push(sub.score);
 
                 // Create data point for this attempt
                 const dataPoint: any = {
@@ -1353,23 +1344,26 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
                     date: `Attempt ${attemptIndex + 1}` // X-axis label
                 };
 
-                // Add individual quiz scores for all chapters (use actual score for current chapter, cumulative for others)
-                chapterCumulativeScores.forEach((chapterData, chapterId) => {
+                // For each chapter, calculate average up to this attempt or carry forward last known average or undefined
+                allChapterIds.forEach(chapterId => {
                     const chapterName = textbookCache.get(chapterId) || chapterId;
-                    if (chapterId === sub.chapterId) {
-                        // Use actual quiz score for the current chapter
-                        dataPoint[chapterName] = sub.score;
+                    const scores = chapterScores.get(chapterId);
+                    if (scores && scores.length > 0) {
+                        // Calculate average up to this attempt
+                        const avg = scores.reduce((a: number, b: number) => a + b, 0) / scores.length;
+                        dataPoint[chapterName] = Math.round(avg);
+                        lastKnownAverages.set(chapterId, Math.round(avg));
+                    } else if (lastKnownAverages.has(chapterId)) {
+                        // Carry forward last known average
+                        dataPoint[chapterName] = lastKnownAverages.get(chapterId);
                     } else {
-                        // Use cumulative average for other chapters (to maintain continuity)
-                        dataPoint[chapterName] = Math.round(chapterData.cumulativeAverage);
+                        // Not attempted yet
+                        dataPoint[chapterName] = undefined;
                     }
                 });
 
                 progressOverTime.push(dataPoint);
             });
-
-            console.log("Progress over time data:", progressOverTime);
-            console.log("Chapter cumulative scores:", Object.fromEntries(chapterCumulativeScores));
 
             return progressOverTime;
         })(),
