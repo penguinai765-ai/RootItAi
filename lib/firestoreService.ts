@@ -1315,10 +1315,9 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
         chapterPerformance,
         subtopicPerformance, // <-- add this line
         progressOverTime: (() => {
-            // Calculate progress over time with chapter average (not cumulative), carry forward last known average, always include all chapters
-            const progressOverTime: any[] = [];
-            const chapterScores = new Map(); // chapterId -> array of scores up to this attempt
-            const lastKnownAverages = new Map(); // chapterId -> last known average
+            // For each chapter, build an array of { x: attempt number for that chapter, y: average for that chapter at that attempt }
+            const chapterProgress: Record<string, { x: number, y: number }[]> = {};
+            const chapterSubtopicScores = new Map(); // chapterId -> array of all subtopic scores for that chapter
 
             // Sort submissions by start time (oldest to newest)
             const sortedSubmissions = [...subjectSubmissions].sort((a, b) => {
@@ -1330,42 +1329,23 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
             // Get all unique chapterIds
             const allChapterIds = Array.from(new Set(sortedSubmissions.map(sub => sub.chapterId)));
 
-            // For each attempt, build the data point
-            sortedSubmissions.forEach((sub, attemptIndex) => {
-                // Add this score to the chapter's score list
-                if (!chapterScores.has(sub.chapterId)) {
-                    chapterScores.set(sub.chapterId, []);
-                }
-                chapterScores.get(sub.chapterId).push(sub.score);
-
-                // Create data point for this attempt
-                const dataPoint: any = {
-                    attempt: attemptIndex + 1, // 1-based attempt index
-                    date: `Attempt ${attemptIndex + 1}` // X-axis label
-                };
-
-                // For each chapter, calculate average up to this attempt or carry forward last known average or undefined
-                allChapterIds.forEach(chapterId => {
-                    const chapterName = textbookCache.get(chapterId) || chapterId;
-                    const scores = chapterScores.get(chapterId);
-                    if (scores && scores.length > 0) {
-                        // Calculate average up to this attempt
+            // For each chapter, build its progress array
+            allChapterIds.forEach(chapterId => {
+                const chapterName = textbookCache.get(chapterId) || chapterId;
+                chapterProgress[chapterName] = [];
+                let scores: number[] = [];
+                let attempt = 0;
+                sortedSubmissions.forEach(sub => {
+                    if (sub.chapterId === chapterId) {
+                        attempt += 1;
+                        scores.push(sub.score);
                         const avg = scores.reduce((a: number, b: number) => a + b, 0) / scores.length;
-                        dataPoint[chapterName] = Math.round(avg);
-                        lastKnownAverages.set(chapterId, Math.round(avg));
-                    } else if (lastKnownAverages.has(chapterId)) {
-                        // Carry forward last known average
-                        dataPoint[chapterName] = lastKnownAverages.get(chapterId);
-                    } else {
-                        // Not attempted yet
-                        dataPoint[chapterName] = undefined;
+                        chapterProgress[chapterName].push({ x: attempt, y: Math.round(avg) });
                     }
                 });
-
-                progressOverTime.push(dataPoint);
             });
 
-            return progressOverTime;
+            return chapterProgress;
         })(),
         cognitiveInsights,
         strengths,
