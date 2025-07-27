@@ -203,22 +203,25 @@ export default function SubjectAnalyticsPage() {
                 </div>
 
                 {/* Progress Over Time Chart */}
-                {analytics.progressOverTime && analytics.progressOverTime.length > 0 && (
-                    <div className="shadow-lg border-0 bg-white/80 backdrop-blur-sm rounded-2xl p-6">
+                {analytics.progressOverTime && Object.keys(analytics.progressOverTime).length > 0 && (
+                    <div className="shadow-lg border-0 bg-white/80 backdrop-blur-sm rounded-2xl p-6 w-full overflow-x-hidden">
                         <div className="flex items-center gap-2 mb-6">
                             <TrendingUp className="w-6 h-6 text-purple-600" />
                             <h2 className="text-xl font-bold text-gray-800">Progress Over Time</h2>
                         </div>
 
-                        <div className="h-80 w-full mb-6">
+                        <div className="h-80 w-full mb-6 overflow-hidden">
                             <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={analytics.progressOverTime}>
+                                <LineChart>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" strokeOpacity={0.5} />
                                     <XAxis
-                                        dataKey="date"
-                                        tick={{ fontSize: 12, fill: "#6b7280" }}
+                                        type="number"
+                                        dataKey="x"
+                                        tick={false}
                                         axisLine={false}
                                         tickLine={false}
+                                        label={{ value: "Attempts", position: "insideBottom", offset: -5 }}
+                                        domain={['auto', 'auto']}
                                     />
                                     <YAxis
                                         tick={{ fontSize: 12, fill: "#6b7280" }}
@@ -226,13 +229,15 @@ export default function SubjectAnalyticsPage() {
                                         tickLine={false}
                                         domain={[0, 100]}
                                     />
-                                    {Object.keys(analytics.progressOverTime[0] || {}).filter(key => key !== 'date' && key !== 'attempt').map((chapterName, index) => (
+                                    <Tooltip />
+                                    {Object.keys(analytics.progressOverTime).map((chapterName, index) => (
                                         <Line
                                             key={chapterName}
+                                            data={analytics.progressOverTime[chapterName].map((point: { x: number; y: number }) => ({ ...point, x: point.x - 1 }))}
                                             type="monotone"
-                                            dataKey={chapterName}
+                                            dataKey="y"
+                                            name={chapterName}
                                             stroke={chartColors[index % chartColors.length]}
-                                            strokeWidth={3}
                                             dot={{ fill: chartColors[index % chartColors.length], strokeWidth: 2, r: 4 }}
                                             activeDot={{ r: 6, stroke: chartColors[index % chartColors.length], strokeWidth: 2 }}
                                             connectNulls={false}
@@ -243,14 +248,14 @@ export default function SubjectAnalyticsPage() {
                         </div>
 
                         {/* Legend */}
-                        <div className="flex flex-wrap gap-3 justify-center">
-                            {Object.keys(analytics.progressOverTime[0] || {}).filter(key => key !== 'date' && key !== 'attempt').map((chapterName, index) => (
-                                <div key={chapterName} className="flex items-center gap-2">
+                        <div className="flex flex-wrap gap-3 justify-center w-full">
+                            {Object.keys(analytics.progressOverTime).map((chapterName, index) => (
+                                <div key={chapterName} className="flex items-center gap-2 min-w-0">
                                     <div
-                                        className="w-4 h-4 rounded-full"
+                                        className="w-4 h-4 rounded-full flex-shrink-0"
                                         style={{ backgroundColor: chartColors[index % chartColors.length] }}
                                     ></div>
-                                    <span className="text-sm font-medium text-gray-700">{chapterName}</span>
+                                    <span className="text-sm font-medium text-gray-700 truncate">{chapterName}</span>
                                 </div>
                             ))}
                         </div>

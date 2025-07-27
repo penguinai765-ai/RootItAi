@@ -199,7 +199,7 @@ export default function StudentHomePage() {
 
   // --- UI ---
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden w-full max-w-full">
       {/* Top Header - Responsive */}
       <div className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-50 md:ml-64">
         <div className="px-3 py-3 md:px-6 md:py-4">
@@ -270,7 +270,7 @@ export default function StudentHomePage() {
                       key={quiz.id}
                       className={`absolute top-0 left-0 w-full transition-all duration-500 ease-out cursor-pointer ${isActive ? "z-10" : "z-5"}`}
                       style={{
-                        transform: `translateX(${circularOffset * 50}px) translateY(${Math.abs(circularOffset) * 5}px) scale(${isActive ? 1 : 0.85 - Math.abs(circularOffset) * 0.05}) rotateY(${circularOffset * 15}deg)`,
+                        transform: `translateX(${circularOffset * 60}px) translateY(${Math.abs(circularOffset) * 8}px) scale(${isActive ? 1 : 0.8 - Math.abs(circularOffset) * 0.08}) rotateY(${circularOffset * 18}deg)`,
                         opacity: Math.abs(circularOffset) > 2 ? 0 : 1 - Math.abs(circularOffset) * 0.2,
                         filter: `blur(${Math.abs(circularOffset) * 0.4}px)`,
                         zIndex: isActive ? 10 : Math.max(1, 5 - Math.abs(circularOffset)),
