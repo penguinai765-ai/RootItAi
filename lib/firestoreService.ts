@@ -1080,20 +1080,20 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
         };
     }
 
-    // Sort by date (newest to oldest)
+    // Sort by date (oldest to newest) for consistent progress calculation
     subjectSubmissions.sort((a, b) => {
         const dateA = a.lastAttempted?.toDate?.() || new Date(a.lastAttempted);
         const dateB = b.lastAttempted?.toDate?.() || new Date(b.lastAttempted);
-        return dateB.getTime() - dateA.getTime();
+        return dateA.getTime() - dateB.getTime();
     });
 
     // Calculate summary metrics
     const averageScore = subjectSubmissions.reduce((sum, sub) => sum + sub.score, 0) / subjectSubmissions.length;
     const quizzesAttempted = subjectSubmissions.length;
 
-    // Calculate last 5 quizzes comparison
-    const lastFiveQuizzes = subjectSubmissions.slice(0, 5);
-    const previousFiveQuizzes = subjectSubmissions.slice(5, 10);
+    // Calculate last 5 quizzes comparison (since submissions are now oldest to newest)
+    const lastFiveQuizzes = subjectSubmissions.slice(-5); // Last 5 (most recent)
+    const previousFiveQuizzes = subjectSubmissions.slice(-10, -5); // Previous 5
 
     const lastFiveAvg = lastFiveQuizzes.length > 0
         ? lastFiveQuizzes.reduce((sum, sub) => sum + sub.score, 0) / lastFiveQuizzes.length
@@ -1107,9 +1107,10 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
         ? ((lastFiveQuizzes.length - previousFiveQuizzes.length) / previousFiveQuizzes.length) * 100
         : 0;
 
-    // Calculate improvement rate (overall trend)
-    const firstHalf = subjectSubmissions.slice(Math.ceil(subjectSubmissions.length / 2));
-    const secondHalf = subjectSubmissions.slice(0, Math.ceil(subjectSubmissions.length / 2));
+    // Calculate improvement rate (overall trend) - compare older vs newer submissions
+    const midpoint = Math.ceil(subjectSubmissions.length / 2);
+    const firstHalf = subjectSubmissions.slice(0, midpoint); // Older submissions (first half)
+    const secondHalf = subjectSubmissions.slice(midpoint); // Newer submissions (second half)
 
     const firstHalfAvg = firstHalf.length > 0 ? firstHalf.reduce((sum, sub) => sum + sub.score, 0) / firstHalf.length : 0;
     const secondHalfAvg = secondHalf.length > 0 ? secondHalf.reduce((sum, sub) => sum + sub.score, 0) / secondHalf.length : 0;
@@ -1317,17 +1318,10 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
         progressOverTime: (() => {
             // For each chapter, build an array of { x: attempt number for that chapter, y: average for that chapter at that attempt }
             const chapterProgress: Record<string, { x: number, y: number }[]> = {};
-            const chapterSubtopicScores = new Map(); // chapterId -> array of all subtopic scores for that chapter
-
-            // Sort submissions by start time (oldest to newest)
-            const sortedSubmissions = [...subjectSubmissions].sort((a, b) => {
-                const dateA = a.analytics?.startTime?.toDate?.() || new Date(a.analytics?.startTime);
-                const dateB = b.analytics?.startTime?.toDate?.() || new Date(b.analytics?.startTime);
-                return dateA.getTime() - dateB.getTime();
-            });
-
+            
+            // subjectSubmissions is already sorted by lastAttempted (oldest to newest)
             // Get all unique chapterIds
-            const allChapterIds = Array.from(new Set(sortedSubmissions.map(sub => sub.chapterId)));
+            const allChapterIds = Array.from(new Set(subjectSubmissions.map(sub => sub.chapterId)));
 
             // For each chapter, build its progress array
             allChapterIds.forEach(chapterId => {
@@ -1335,7 +1329,7 @@ export const getStudentSubjectAnalytics = async (uid: string, subjectCode: strin
                 chapterProgress[chapterName] = [];
                 let scores: number[] = [];
                 let attempt = 0;
-                sortedSubmissions.forEach(sub => {
+                subjectSubmissions.forEach(sub => {
                     if (sub.chapterId === chapterId) {
                         attempt += 1;
                         scores.push(sub.score);
